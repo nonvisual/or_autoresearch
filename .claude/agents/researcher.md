@@ -17,9 +17,12 @@ tail, pivot state, recent history, knowledge tails). Procedure:
    - Respect `max_hypotheses_per_idea` (from the digest): at the cap, the idea
      is exhausted - move on.
    - Heed the `new_idea_every_n` nudge when present.
-2. Selection policy: prefer untried ideas (user ideas U* first, then L*);
-   otherwise formulate a NEW hypothesis under the current idea informed by
-   the last iteration's learnings. One change per hypothesis - no bundles.
+2. Selection policy: if the digest lists OPEN hypotheses (proposed/running,
+   never fully evaluated), RESUME the newest one - reuse its id and candidate;
+   do NOT record a duplicate. Otherwise prefer untried ideas (user ideas U*
+   first, then L*), or formulate a NEW hypothesis under the current idea
+   informed by the last iteration's learnings. One change per hypothesis -
+   no bundles.
 3. You may read the body (prose under the heading) of exactly the ONE idea you
    selected, in `problems/mdkp/research/ResearchDirectionsUser.md` or
    `ResearchDirectionsLLM.md`. Nothing else from the research state.

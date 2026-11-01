@@ -108,6 +108,17 @@ def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
     else:
         lines.append("No kept candidates yet - the first full evals set the bar.")
 
+    open_hyps = [r for r in hypotheses.read(problem_dir)
+                 if r.get("status") in (hypotheses.PROPOSED, hypotheses.RUNNING)]
+    if open_hyps:
+        lines.append("")
+        lines.append("OPEN hypotheses (not yet fully evaluated - RESUME these, do not re-record):")
+        for r in open_hyps[-3:]:
+            lines.append(
+                f"  {r.get('id', '?')} [{r.get('idea_refs') or '-'}] {r.get('status', '?')} "
+                f"{r.get('candidate_file') or '-'} - {_trunc(r.get('hypothesis'))}"
+            )
+
     if rows:
         lines.append("")
         lines.append("Recent history.tsv rows (oldest first; score, cov = coverage, hid = hypothesis):")

@@ -75,6 +75,18 @@ def test_digest_new_idea_nudge(tmp_path):
     assert "consider proposing a NEW idea" in text
 
 
+def test_digest_shows_open_hypotheses_for_resume(tmp_path):
+    pd = tmp_path / "mdkp"
+    pd.mkdir()
+    _seed(pd)
+    hypotheses.append(pd, {"hypothesis": "unfinished idea", "idea_refs": "U2", "type": "user"})
+    hypotheses.mark_running(pd, "H5", "candidate_wip.py")
+    text = digest.build(pd, 15, {})
+    assert "OPEN hypotheses" in text
+    assert "H5 [U2] running candidate_wip.py" in text
+    assert "RESUME" in text
+
+
 def test_digest_empty_state_points_at_baselines(tmp_path):
     pd = tmp_path / "mdkp"
     pd.mkdir()
