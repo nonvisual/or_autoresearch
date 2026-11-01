@@ -1,1 +1,2 @@
 iteration	timestamp	candidate_file	score	delta	coverage	subset	status	hypothesis	hypothesis_id	learnings
+1	2026-11-01T09:10:05+00:00	example_random.py	0.788737		1.0000	smoke	kept	day-one sanity run		example_random expected to lose to reference

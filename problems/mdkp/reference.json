@@ -1,0 +1,46 @@
+{
+  "problem": "mdkp",
+  "updated": "2026-11-01T09:09:53+00:00",
+  "instances": {
+    "large_0": {
+      "objective": 107005.0,
+      "source": "baseline_mip.py"
+    },
+    "large_1": {
+      "objective": 107628.0,
+      "source": "baseline_mip.py"
+    },
+    "medium_0": {
+      "objective": 57206.0,
+      "source": "baseline_mip.py"
+    },
+    "medium_1": {
+      "objective": 56549.0,
+      "source": "baseline_mip.py"
+    },
+    "medium_2": {
+      "objective": 56107.0,
+      "source": "baseline_mip.py"
+    },
+    "small_0": {
+      "objective": 37472.0,
+      "source": "baseline_mip.py"
+    },
+    "small_1": {
+      "objective": 36538.0,
+      "source": "baseline_mip.py"
+    },
+    "small_2": {
+      "objective": 32260.0,
+      "source": "baseline_mip.py"
+    },
+    "tight_0": {
+      "objective": 60879.0,
+      "source": "baseline_mip.py"
+    },
+    "tight_1": {
+      "objective": 61400.0,
+      "source": "baseline_mip.py"
+    }
+  }
+}
