@@ -100,10 +100,14 @@ def langfuse_config(env_config: dict[str, str]) -> dict | None:
 def telemetry_env(langfuse: dict | None, attributes: dict[str, str]) -> dict[str, str]:
     """OTel env vars routing Claude Code's native session telemetry to Langfuse (pure).
 
-    Claude Code emits OTLP spans - one trace per session, nested spans per tool
-    call and LLM call - when CLAUDE_CODE_ENABLE_TELEMETRY=1; Langfuse ingests
-    them at <host>/api/public/otel with basic auth (public:secret key).
-    Metrics/logs exporters stay off: Langfuse takes traces only. The resource
+    Claude Code exports OTLP traces - one trace per session
+    (claude_code.interaction) with nested llm_request / tool spans - only when
+    BOTH CLAUDE_CODE_ENABLE_TELEMETRY=1 AND CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1
+    are set; without the beta flag it only emits log records (which self-hosted
+    Langfuse v4 cannot ingest - no /v1/logs route). Metrics/logs exporters stay
+    "none": Langfuse takes traces only, and the beta-gated trace pipeline works
+    independently of them. The 1s export interval flushes short sessions;
+    the OTEL_LOG_* flags un-redact prompts and tool details. The resource
     attributes tag every span with loop context (filterable in Langfuse).
     """
     if langfuse is None:
@@ -114,12 +118,17 @@ def telemetry_env(langfuse: dict | None, attributes: dict[str, str]) -> dict[str
     attrs = ",".join(f"{k}={v}" for k, v in sorted(attributes.items()))
     return {
         "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+        "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA": "1",
         "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
         "OTEL_EXPORTER_OTLP_ENDPOINT": f"{langfuse['host']}/api/public/otel",
         "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Basic {token}",
         "OTEL_TRACES_EXPORTER": "otlp",
         "OTEL_METRICS_EXPORTER": "none",
         "OTEL_LOGS_EXPORTER": "none",
+        "OTEL_TRACES_EXPORT_INTERVAL": "1000",
+        "OTEL_LOG_USER_PROMPTS": "1",
+        "OTEL_LOG_TOOL_DETAILS": "1",
+        "OTEL_LOG_TOOL_CONTENT": "1",
         "OTEL_RESOURCE_ATTRIBUTES": attrs,
     }
 

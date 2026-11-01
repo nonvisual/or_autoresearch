@@ -1,6 +1,6 @@
 #!/bin/sh
-# Launch a command (typically `claude`) with Claude Code session telemetry
-# routed to Langfuse. Reads LANGFUSE_* keys from the repo-root .env.
+# Launch a command (typically `claude`) with Claude Code session tracing to
+# Langfuse. Reads LANGFUSE_* keys from the repo-root .env.
 #
 #   scripts/with_langfuse.sh claude        # then /or-iterate inside
 #   scripts/with_langfuse.sh claude -p "..." --max-turns 40
@@ -9,6 +9,10 @@
 # The autonomous driver (scripts/run_loop.py) enables the same telemetry
 # automatically when the keys are present - this wrapper is for interactive
 # sessions, whose env must be set before claude starts.
+#
+# CLAUDE_CODE_ENHANCED_TELEMETRY_BETA is the critical flag: without it Claude
+# Code exports only log records (no traces), and self-hosted Langfuse v4 has
+# no /v1/logs route, so nothing would be ingested.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -32,11 +36,16 @@ TOKEN=$(printf '%s:%s' "$PK" "$SK" | base64 | tr -d '\n')
 
 exec env \
     CLAUDE_CODE_ENABLE_TELEMETRY=1 \
+    CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 \
     OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
     OTEL_EXPORTER_OTLP_ENDPOINT="${HOST%/}/api/public/otel" \
     OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ${TOKEN}" \
     OTEL_TRACES_EXPORTER=otlp \
     OTEL_METRICS_EXPORTER=none \
     OTEL_LOGS_EXPORTER=none \
+    OTEL_TRACES_EXPORT_INTERVAL=1000 \
+    OTEL_LOG_USER_PROMPTS=1 \
+    OTEL_LOG_TOOL_DETAILS=1 \
+    OTEL_LOG_TOOL_CONTENT=1 \
     OTEL_RESOURCE_ATTRIBUTES="service.name=or-autoresearch,loop.mode=interactive" \
     "$@"

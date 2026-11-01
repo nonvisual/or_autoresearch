@@ -115,9 +115,10 @@ respect, objective bounds).
 
 ## Observability (Langfuse)
 
-Detailed per-session traces - one trace per Claude Code session, with nested
-spans for every tool call and LLM call - ship to Langfuse via Claude Code's
-native OTel telemetry. Opt-in, no code changes:
+Detailed per-session traces - one trace per Claude Code session
+(`claude_code.interaction` root, nested `claude_code.llm_request` and
+`claude_code.tool` spans, prompts and tool content included) - ship to
+Langfuse via Claude Code's native OTel telemetry. Opt-in, no code changes:
 
 1. Add your keys to `.env` (see `.env.example`):
    `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and optionally
@@ -127,7 +128,8 @@ native OTel telemetry. Opt-in, no code changes:
    [langfuse/docker-compose.yml](https://github.com/langfuse/langfuse)), which
    also accepts `LANGFUSE_INIT_*` variables to bootstrap org/project/API keys
    without the UI; then set `LANGFUSE_HOST` to where it actually listens
-   (e.g. `http://localhost:3300` if something else owns 3000).
+   (e.g. `http://localhost:3300` if something else owns 3000). Budget ~4 GiB
+   RAM for the stack.
 2. **Autonomous driver**: nothing else. When the keys are present,
    `run_loop.py` enables telemetry for every invocation and tags its traces
    with `service.name=or-autoresearch`, `loop.problem`, `loop.workspace`, and
@@ -140,11 +142,14 @@ native OTel telemetry. Opt-in, no code changes:
    scripts/with_langfuse.sh claude     # then /or-iterate inside
    ```
 
-Traces land in the Langfuse project of the keys; Claude Code stamps spans
-with its own session id attribute, which Langfuse can map to sessions. To
-correlate a trace with the on-disk loop state, match `loop.workspace` +
-`loop.iteration` against the workspace's `.driver_prompt.txt` and
-`driver_log.jsonl`.
+Gotcha worth knowing: Claude Code only exports OTLP **traces** when both
+`CLAUDE_CODE_ENABLE_TELEMETRY=1` and `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
+are set - without the beta flag it emits only log records, which self-hosted
+Langfuse v4 cannot ingest (no `/v1/logs` route). The driver and the wrapper
+set this for you; the `/langfuse` skill documents verification and
+troubleshooting. To correlate a trace with the on-disk loop state, match
+`loop.workspace` + `loop.iteration` against the workspace's
+`.driver_prompt.txt` and `driver_log.jsonl`.
 
 ## Adding a problem
 
