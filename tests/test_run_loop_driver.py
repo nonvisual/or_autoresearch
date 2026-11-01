@@ -84,6 +84,11 @@ def test_telemetry_env_disabled_without_langfuse():
     assert drv.telemetry_env(None, {"a": "b"}) == {}
 
 
+def test_langfuse_unreachable_returns_false_not_an_error():
+    lf = {"public_key": "pk", "secret_key": "sk", "host": "http://127.0.0.1:1"}  # closed port
+    assert drv.langfuse_reachable(lf, timeout_s=0.5) is False
+
+
 def test_telemetry_env_shapes_otel_vars():
     lf = {"public_key": "pk", "secret_key": "sk", "host": "http://localhost:3000"}
     env = drv.telemetry_env(lf, {"loop.iteration": "2", "service.name": "or-autoresearch"})

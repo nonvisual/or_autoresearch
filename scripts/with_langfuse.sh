@@ -34,6 +34,14 @@ if [ -z "$PK" ] || [ -z "$SK" ]; then
     echo "error: LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY not set in .env" >&2
     exit 2
 fi
+# Observability is optional: if Langfuse is not running, launch the command
+# plainly instead of pointing the exporter at a dead endpoint.
+if command -v curl >/dev/null 2>&1; then
+    if ! curl -s -o /dev/null --max-time 2 "${HOST%/}/api/public/health"; then
+        echo "warning: langfuse not reachable at ${HOST} - continuing WITHOUT tracing" >&2
+        exec "$@"
+    fi
+fi
 TOKEN=$(printf '%s:%s' "$PK" "$SK" | base64 | tr -d '\n')
 
 exec env \

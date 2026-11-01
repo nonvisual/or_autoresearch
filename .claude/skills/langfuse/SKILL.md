@@ -71,6 +71,12 @@ Langfuse project's attribute-mapping settings.
 
 ## Troubleshoot
 
+- **Langfuse not running?** Everything still works - telemetry is strictly
+  optional: the driver detects an unreachable host per iteration, prints one
+  "continuing WITHOUT tracing" notice, and keeps looping (re-checks each
+  iteration, so starting the stack mid-run re-enables tracing);
+  `with_langfuse.sh` launches the command plainly instead. Never start the
+  stack just to unblock a run.
 - **No traces at all** -> cause #1 is the missing beta flag; #2 is launching
   claude without the env (setting it inside the session is too late);
   #3 is dead Langfuse (check stack). `claude --debug-file /tmp/cc-debug.log`

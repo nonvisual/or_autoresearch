@@ -32,6 +32,8 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -95,6 +97,21 @@ def langfuse_config(env_config: dict[str, str]) -> dict | None:
         return None
     host = (env_config.get("LANGFUSE_HOST") or "https://cloud.langfuse.com").rstrip("/")
     return {"public_key": public_key, "secret_key": secret_key, "host": host}
+
+
+def langfuse_reachable(langfuse: dict, timeout_s: float = 2.0) -> bool:
+    """True if the Langfuse service answers at all (any HTTP status counts).
+
+    Telemetry is strictly fire-and-forget: when the service is down the loop
+    continues WITHOUT tracing - observability must never fail a research run.
+    """
+    try:
+        urllib.request.urlopen(f"{langfuse['host']}/api/public/health", timeout=timeout_s)
+        return True
+    except urllib.error.HTTPError:
+        return True  # service answered (auth/routing); the exporter gets the same
+    except Exception:  # noqa: BLE001 - connection refused, timeout, DNS: all "down"
+        return False
 
 
 def telemetry_env(langfuse: dict | None, attributes: dict[str, str]) -> dict[str, str]:
@@ -335,6 +352,7 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
     prev_rows = count_full(problem_dir)
     env_config = load_env_config()
     langfuse = langfuse_config(env_config)
+    telemetry_down_notice = False
     cmd = claude_command(max_turns)
 
     while prev_rows < iterations and time.monotonic() < deadline:
@@ -349,18 +367,29 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
         )
         # Env is rebuilt per iteration so every session's traces carry the
         # current loop context (workspace, iteration number) as attributes.
+        # If Langfuse is down, telemetry is skipped (never fatal); the check
+        # re-runs each iteration, so starting the stack mid-run re-enables it.
+        live = langfuse is not None and langfuse_reachable(langfuse)
+        if langfuse is not None:
+            if not live and not telemetry_down_notice:
+                print(f"[driver] telemetry: langfuse unreachable at {langfuse['host']} - "
+                      "continuing WITHOUT tracing (the loop itself is unaffected)")
+                telemetry_down_notice = True
+            elif live and telemetry_down_notice:
+                print("[driver] telemetry: langfuse back online - tracing re-enabled")
+                telemetry_down_notice = False
         telemetry = telemetry_env(langfuse, {
             "service.name": "or-autoresearch",
             "loop.problem": problem,
             "loop.workspace": ws.name,
             "loop.iteration": str(prev_rows + 1),
-        })
+        }) if live else {}
         env = session_env(ws, env_config, telemetry)
         # Post-mortem artifact: the prompt itself is delivered via stdin, but
         # the file records exactly what the session was told.
         (ws / ".driver_prompt.txt").write_text(prompt)
         print(f"[driver] invoking claude for iteration {prev_rows + 1}/{iterations}")
-        if langfuse:
+        if live:
             print(f"[driver] telemetry: langfuse at {langfuse['host']} (loop.* attributes)")
         rc, timed_out, wall_s, _ = run_claude(ws, cmd, prompt, claude_cap_minutes, env)
         if rc != 0:
@@ -385,7 +414,7 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
             wall_s=round(wall_s, 1),
             pivot_state=pivot,
             model=env_config.get("ANTHROPIC_MODEL", ""),
-            langfuse=bool(langfuse),
+            langfuse=bool(live),
         )
         if rows > prev_rows:
             stalled = 0

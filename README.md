@@ -142,6 +142,11 @@ Langfuse via Claude Code's native OTel telemetry. Opt-in, no code changes:
    scripts/with_langfuse.sh claude     # then /or-iterate inside
    ```
 
+Everything degrades gracefully: if Langfuse is not running, the driver prints
+one "continuing WITHOUT tracing" notice and keeps looping (re-checking each
+iteration), and `with_langfuse.sh` launches the command plainly - observability
+never blocks a research run.
+
 Gotcha worth knowing: Claude Code only exports OTLP **traces** when both
 `CLAUDE_CODE_ENABLE_TELEMETRY=1` and `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
 are set - without the beta flag it emits only log records, which self-hosted
