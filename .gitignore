@@ -1,0 +1,27 @@
+# secrets / local env
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# loop workspaces (assembled per-run copies)
+loop_runs/
+
+# per-loop eval outputs
+runs/
+
+# driver artifacts
+.driver_prompt.txt
+.driver_state.json
+driver_log.jsonl
+.claude-config/
+
+# mac
+.DS_Store
+
+# local claude settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

@@ -1,0 +1,12 @@
+{
+  "problem": "mdkp",
+  "iterations": 15,
+  "idea_pivot_n": 3,
+  "max_hypotheses_per_idea": 5,
+  "new_idea_every_n": 5,
+  "plateau_window": 4,
+  "scorer": "auc",
+  "max_turns": 60,
+  "claude_cap_minutes": 25,
+  "timeout_hours": 12
+}
