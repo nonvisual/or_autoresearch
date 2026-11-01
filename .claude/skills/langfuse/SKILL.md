@@ -42,6 +42,21 @@ the sources of truth. Critical facts (do not re-derive):
   why the wrapper and driver inject them).
 - `OTEL_RESOURCE_ATTRIBUTES` values must not contain spaces.
 
+## Where input/output lives in the UI
+
+The trace tree shows structure by default; the CONTENT sits in each span's
+ATTRIBUTES section (expand the span):
+- `claude_code.interaction` -> `user_prompt` (the prompt text)
+- `claude_code.llm_request` -> `response.model_output` (assistant reply),
+  `system_prompt_preview`, `tools`, token counts
+- tool spans (`Bash`, `Read`, ...) -> `tool_input` (exact command/args)
+
+These come from the detailed tracing tier (`ENABLE_BETA_TRACING_DETAILED=1` +
+`BETA_TRACING_ENDPOINT`); without it spans carry only metadata (model, tokens,
+timing). To surface them in the Input/Output panes instead of attributes,
+map `attributes.user_prompt` / `attributes.response.model_output` in the
+Langfuse project's attribute-mapping settings.
+
 ## Verify ingestion
 
 1. Stack up? `docker-compose -f <langfuse compose dir>/docker-compose.yml ps`
@@ -50,7 +65,9 @@ the sources of truth. Critical facts (do not re-derive):
 2. Spans landed? Query ClickHouse directly:
    `... exec -T clickhouse clickhouse-client --query "select toString(start_time), name, type from events_core order by start_time desc limit 10"`
    (UI lags a few seconds behind ingestion).
-3. UI: Langfuse project traces, filtered by `loop.problem` / `loop.iteration`.
+3. Content attached?
+   `select name, arrayFilter(x -> position(x, 'user_prompt') > 0 or position(x, 'model_output') > 0 or position(x, 'tool_input') > 0, metadata_names) from events_full ...`
+4. UI: Langfuse project traces, filtered by `loop.problem` / `loop.iteration`.
 
 ## Troubleshoot
 

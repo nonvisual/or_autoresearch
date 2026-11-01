@@ -12,7 +12,9 @@
 #
 # CLAUDE_CODE_ENHANCED_TELEMETRY_BETA is the critical flag: without it Claude
 # Code exports only log records (no traces), and self-hosted Langfuse v4 has
-# no /v1/logs route, so nothing would be ingested.
+# no /v1/logs route, so nothing would be ingested. The DETAILED tier adds the
+# actual content to spans (user_prompt / response.model_output / tool_input)
+# and redirects trace export to BETA_TRACING_ENDPOINT (http/json).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -37,6 +39,8 @@ TOKEN=$(printf '%s:%s' "$PK" "$SK" | base64 | tr -d '\n')
 exec env \
     CLAUDE_CODE_ENABLE_TELEMETRY=1 \
     CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1 \
+    ENABLE_BETA_TRACING_DETAILED=1 \
+    BETA_TRACING_ENDPOINT="${HOST%/}/api/public/otel" \
     OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
     OTEL_EXPORTER_OTLP_ENDPOINT="${HOST%/}/api/public/otel" \
     OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic ${TOKEN}" \

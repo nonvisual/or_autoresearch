@@ -89,8 +89,11 @@ def test_telemetry_env_shapes_otel_vars():
     env = drv.telemetry_env(lf, {"loop.iteration": "2", "service.name": "or-autoresearch"})
     token = base64.b64encode(b"pk:sk").decode()
     assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
-    # without the beta flag Claude Code emits no OTLP traces at all
+    # without the beta flag Claude Code emits no OTLP traces at all; the
+    # detailed tier puts content (prompts/tool I/O) on the spans
     assert env["CLAUDE_CODE_ENHANCED_TELEMETRY_BETA"] == "1"
+    assert env["ENABLE_BETA_TRACING_DETAILED"] == "1"
+    assert env["BETA_TRACING_ENDPOINT"] == "http://localhost:3000/api/public/otel"
     assert env["OTEL_EXPORTER_OTLP_PROTOCOL"] == "http/protobuf"
     assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://localhost:3000/api/public/otel"
     assert env["OTEL_EXPORTER_OTLP_HEADERS"] == f"Authorization=Basic {token}"
