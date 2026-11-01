@@ -13,7 +13,9 @@ argument is a number of iterations; anything else is ignored.
 Caveat: interactive mode commits bookkeeping to the CURRENT repo and branch -
 run this on a dedicated branch unless you want the commits on your current
 one. (The autonomous driver commits to an isolated `loop_runs/` workspace
-instead.)
+instead.) For Langfuse trace observability this session must have been
+launched with telemetry env set - see `scripts/with_langfuse.sh` (README
+"Observability").
 
 Steps:
 

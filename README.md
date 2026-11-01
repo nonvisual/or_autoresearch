@@ -113,6 +113,39 @@ time budget is a cap. Quick feedback: `scripts/test_solver.py --problem <p>
 --solver <file> [--full]` (contract, feasibility, determinism, budget
 respect, objective bounds).
 
+## Observability (Langfuse)
+
+Detailed per-session traces - one trace per Claude Code session, with nested
+spans for every tool call and LLM call - ship to Langfuse via Claude Code's
+native OTel telemetry. Opt-in, no code changes:
+
+1. Add your keys to `.env` (see `.env.example`):
+   `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and optionally
+   `LANGFUSE_HOST` (default `https://cloud.langfuse.com`). Self-hosted works
+   the same way - for a local instance use the official compose file
+   (`docker compose up -d` from
+   [langfuse/docker-compose.yml](https://github.com/langfuse/langfuse)), which
+   also accepts `LANGFUSE_INIT_*` variables to bootstrap org/project/API keys
+   without the UI; then set `LANGFUSE_HOST` to where it actually listens
+   (e.g. `http://localhost:3300` if something else owns 3000).
+2. **Autonomous driver**: nothing else. When the keys are present,
+   `run_loop.py` enables telemetry for every invocation and tags its traces
+   with `service.name=or-autoresearch`, `loop.problem`, `loop.workspace`, and
+   `loop.iteration` - filter or group by these attributes in Langfuse to
+   follow a run iteration by iteration. Each `driver_log.jsonl` entry records
+   `"langfuse": true` so the audit trail knows which invocations were traced.
+3. **Interactive sessions** must have the env set before `claude` starts, so
+   launch through the wrapper (traces carry `loop.mode=interactive`):
+   ```bash
+   scripts/with_langfuse.sh claude     # then /or-iterate inside
+   ```
+
+Traces land in the Langfuse project of the keys; Claude Code stamps spans
+with its own session id attribute, which Langfuse can map to sessions. To
+correlate a trace with the on-disk loop state, match `loop.workspace` +
+`loop.iteration` against the workspace's `.driver_prompt.txt` and
+`driver_log.jsonl`.
+
 ## Adding a problem
 
 ```bash

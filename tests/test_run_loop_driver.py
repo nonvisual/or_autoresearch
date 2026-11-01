@@ -1,5 +1,6 @@
-"""Driver pure functions: command, prompt (incl. pivot line), env, sync."""
+"""Driver pure functions: command, prompt (incl. pivot line), env, sync, telemetry."""
 
+import base64
 import sys
 from pathlib import Path
 
@@ -51,6 +52,55 @@ def test_session_env_isolation(tmp_path):
     assert env["ANTHROPIC_MODEL"] == "m"
     assert env["CLAUDE_CONFIG_DIR"] == str(tmp_path / ".claude-config")
     assert (tmp_path / ".claude-config").exists()
+
+
+def test_load_env_config_includes_langfuse_and_otel(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(
+        "LANGFUSE_PUBLIC_KEY=pk\n"
+        "LANGFUSE_SECRET_KEY=sk\n"
+        "OTEL_EXPORTER_OTLP_ENDPOINT=x\n"
+        "UNRELATED=1\n"
+    )
+    cfg = drv.load_env_config(env)
+    assert cfg["LANGFUSE_PUBLIC_KEY"] == "pk"
+    assert "OTEL_EXPORTER_OTLP_ENDPOINT" in cfg
+    assert "UNRELATED" not in cfg
+
+
+def test_langfuse_config_requires_both_keys():
+    assert drv.langfuse_config({}) is None
+    assert drv.langfuse_config({"LANGFUSE_PUBLIC_KEY": "pk"}) is None
+    lf = drv.langfuse_config({"LANGFUSE_PUBLIC_KEY": "pk", "LANGFUSE_SECRET_KEY": "sk"})
+    assert lf == {"public_key": "pk", "secret_key": "sk", "host": "https://cloud.langfuse.com"}
+    self_hosted = drv.langfuse_config(
+        {"LANGFUSE_PUBLIC_KEY": "pk", "LANGFUSE_SECRET_KEY": "sk",
+         "LANGFUSE_HOST": "http://localhost:3000/"}
+    )
+    assert self_hosted["host"] == "http://localhost:3000"  # trailing slash stripped
+
+
+def test_telemetry_env_disabled_without_langfuse():
+    assert drv.telemetry_env(None, {"a": "b"}) == {}
+
+
+def test_telemetry_env_shapes_otel_vars():
+    lf = {"public_key": "pk", "secret_key": "sk", "host": "http://localhost:3000"}
+    env = drv.telemetry_env(lf, {"loop.iteration": "2", "service.name": "or-autoresearch"})
+    token = base64.b64encode(b"pk:sk").decode()
+    assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
+    assert env["OTEL_EXPORTER_OTLP_PROTOCOL"] == "http/protobuf"
+    assert env["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://localhost:3000/api/public/otel"
+    assert env["OTEL_EXPORTER_OTLP_HEADERS"] == f"Authorization=Basic {token}"
+    assert env["OTEL_METRICS_EXPORTER"] == "none"   # Langfuse ingests traces only
+    assert env["OTEL_LOGS_EXPORTER"] == "none"
+    assert env["OTEL_RESOURCE_ATTRIBUTES"] == "loop.iteration=2,service.name=or-autoresearch"
+
+
+def test_session_env_applies_telemetry(tmp_path):
+    env = drv.session_env(tmp_path, {}, {"CLAUDE_CODE_ENABLE_TELEMETRY": "1"})
+    assert env["CLAUDE_CODE_ENABLE_TELEMETRY"] == "1"
+    assert "CLAUDE_CONFIG_DIR" in env
 
 
 def test_resolve_precedence():

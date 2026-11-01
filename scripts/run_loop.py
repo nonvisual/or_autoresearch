@@ -23,6 +23,7 @@ mid-run idea edits reach the loop.
 """
 
 import argparse
+import base64
 import json
 import os
 import shutil
@@ -53,7 +54,7 @@ DEFAULT_CLAUDE_CAP_MINUTES = 20.0
 DEFAULT_TIMEOUT_HOURS = 12.0
 KILL_GRACE_S = 30
 
-ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE_")
+ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE_", "LANGFUSE_", "OTEL_")
 
 HYPER_KEYS = ("idea_pivot_n", "new_idea_every_n", "max_hypotheses_per_idea", "plateau_window")
 
@@ -71,7 +72,7 @@ def hyper_of(cfg: dict) -> dict:
 
 
 def load_env_config(env_path: Path = REPO_ROOT / ".env") -> dict[str, str]:
-    """Pull the LLM configuration (ANTHROPIC_*/CLAUDE_* keys) out of .env."""
+    """Pull the LLM + observability config (ANTHROPIC_*/CLAUDE_*/LANGFUSE_*/OTEL_*) out of .env."""
     config: dict[str, str] = {}
     if not env_path.is_file():
         return config
@@ -86,10 +87,51 @@ def load_env_config(env_path: Path = REPO_ROOT / ".env") -> dict[str, str]:
     return config
 
 
-def session_env(ws: Path, env_config: dict[str, str]) -> dict[str, str]:
-    """Environment for a claude invocation: host env + .env config + isolated config dir."""
+def langfuse_config(env_config: dict[str, str]) -> dict | None:
+    """Langfuse connection from .env-style config; None disables telemetry (pure)."""
+    public_key = env_config.get("LANGFUSE_PUBLIC_KEY", "")
+    secret_key = env_config.get("LANGFUSE_SECRET_KEY", "")
+    if not (public_key and secret_key):
+        return None
+    host = (env_config.get("LANGFUSE_HOST") or "https://cloud.langfuse.com").rstrip("/")
+    return {"public_key": public_key, "secret_key": secret_key, "host": host}
+
+
+def telemetry_env(langfuse: dict | None, attributes: dict[str, str]) -> dict[str, str]:
+    """OTel env vars routing Claude Code's native session telemetry to Langfuse (pure).
+
+    Claude Code emits OTLP spans - one trace per session, nested spans per tool
+    call and LLM call - when CLAUDE_CODE_ENABLE_TELEMETRY=1; Langfuse ingests
+    them at <host>/api/public/otel with basic auth (public:secret key).
+    Metrics/logs exporters stay off: Langfuse takes traces only. The resource
+    attributes tag every span with loop context (filterable in Langfuse).
+    """
+    if langfuse is None:
+        return {}
+    token = base64.b64encode(
+        f"{langfuse['public_key']}:{langfuse['secret_key']}".encode()
+    ).decode()
+    attrs = ",".join(f"{k}={v}" for k, v in sorted(attributes.items()))
+    return {
+        "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": f"{langfuse['host']}/api/public/otel",
+        "OTEL_EXPORTER_OTLP_HEADERS": f"Authorization=Basic {token}",
+        "OTEL_TRACES_EXPORTER": "otlp",
+        "OTEL_METRICS_EXPORTER": "none",
+        "OTEL_LOGS_EXPORTER": "none",
+        "OTEL_RESOURCE_ATTRIBUTES": attrs,
+    }
+
+
+def session_env(ws: Path, env_config: dict[str, str],
+                telemetry: dict[str, str] | None = None) -> dict[str, str]:
+    """Environment for a claude invocation: host env + .env config + optional
+    telemetry vars + isolated config dir."""
     env = dict(os.environ)
     env.update(env_config)
+    if telemetry:
+        env.update(telemetry)
     config_dir = ws / ".claude-config"
     config_dir.mkdir(exist_ok=True)
     env["CLAUDE_CONFIG_DIR"] = str(config_dir)
@@ -278,8 +320,8 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
     stalled = 0
     prev_rows = count_full(problem_dir)
     env_config = load_env_config()
+    langfuse = langfuse_config(env_config)
     cmd = claude_command(max_turns)
-    env = session_env(ws, env_config)
 
     while prev_rows < iterations and time.monotonic() < deadline:
         cfg = load_config()  # host config, re-read every iteration
@@ -291,10 +333,21 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
         prompt = build_iteration_prompt(
             digest_text, prev_rows + 1, iterations, must_pivot=pivot["must_pivot"]
         )
+        # Env is rebuilt per iteration so every session's traces carry the
+        # current loop context (workspace, iteration number) as attributes.
+        telemetry = telemetry_env(langfuse, {
+            "service.name": "or-autoresearch",
+            "loop.problem": problem,
+            "loop.workspace": ws.name,
+            "loop.iteration": str(prev_rows + 1),
+        })
+        env = session_env(ws, env_config, telemetry)
         # Post-mortem artifact: the prompt itself is delivered via stdin, but
         # the file records exactly what the session was told.
         (ws / ".driver_prompt.txt").write_text(prompt)
         print(f"[driver] invoking claude for iteration {prev_rows + 1}/{iterations}")
+        if langfuse:
+            print(f"[driver] telemetry: langfuse at {langfuse['host']} (loop.* attributes)")
         rc, timed_out, wall_s, _ = run_claude(ws, cmd, prompt, claude_cap_minutes, env)
         if rc != 0:
             print(f"[driver] claude exited with {rc}")
@@ -318,6 +371,7 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
             wall_s=round(wall_s, 1),
             pivot_state=pivot,
             model=env_config.get("ANTHROPIC_MODEL", ""),
+            langfuse=bool(langfuse),
         )
         if rows > prev_rows:
             stalled = 0
