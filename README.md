@@ -11,7 +11,7 @@ and exploration hyperparameters.
 ```mermaid
 flowchart TD
     subgraph entry["Entry - dual usage"]
-        DRV["Python driver<br/>scripts/run_loop.py<br/>autonomous, isolated workspace"]
+        DRV["Python driver<br/>scripts/run_loop.py<br/>autonomous, in-place (or --isolate)"]
         SKL["/or-iterate skill<br/>interactive session"]
     end
     DIG["State digest<br/>ideas, hypotheses, pivot state,<br/>history, reference, knowledge"]
@@ -55,12 +55,17 @@ uv run python evaluation/eval_solver.py --problem mdkp \
 
 Run the loop:
 
-- **Autonomous**: `uv run python scripts/run_loop.py` (config in `loop.json`;
-  needs `.env` with `ANTHROPIC_*` keys - see `.env.example`; `claude` CLI on
-  PATH). It assembles an isolated workspace under `loop_runs/`, drives one
-  headless session per iteration with a generated digest, enforces hard caps,
-  and commits bookkeeping. `--dry-run` / `--assemble-only` / `--workspace` to
-  resume.
+- **Autonomous (default, in-place)**: `uv run python scripts/run_loop.py`
+  (config in `loop.json`; needs `.env` with `ANTHROPIC_*` keys - see
+  `.env.example`; `claude` CLI on PATH). Drives one headless session per
+  iteration with a generated digest, enforces hard caps, prints results after
+  every iteration plus a summary table at the end, and commits bookkeeping to
+  a `loop/<problem>__<ts>` branch (created automatically when started from
+  `main`; requires a clean tree). All research state stays in the repo -
+  nothing to extract afterwards. `--dry-run` prints the plan.
+- **Autonomous (isolated)**: `uv run python scripts/run_loop.py --isolate`
+  runs in a full-copy throwaway workspace under `loop_runs/` - use only to
+  run several loops in parallel. `--workspace <dir>` resumes one.
 - **Interactive**: in a Claude Code session (ideally on a branch), invoke
   `/or-iterate` - the session becomes the Orchestrator for one iteration and
   runs bookkeeping via `scripts/finish_iteration.py`.
@@ -72,7 +77,7 @@ Run the loop:
 | Framework | `autoresearch/` | harness (fresh subprocess per instance x budget, kill at 1.25x, solver-log capture), scoring (sense-aware AUC + scorer registry), reference.json, history.tsv, hypotheses.tsv + pivot state, solver battery, digest, bookkeeping |
 | Eval CLI | `evaluation/eval_solver.py` | the single evaluation entry (scores, updates reference, appends history, resolves hypotheses) |
 | Problem packages | `problems/<name>/` | schema, seeded generator, evaluator, benchmark config, baselines, candidates, research state |
-| Driver | `scripts/run_loop.py` + `loop.json` | autonomous mode, hyperparameters, workspace isolation, user-idea sync |
+| Driver | `scripts/run_loop.py` + `loop.json` | autonomous mode (in-place default, `--isolate` for parallel runs), hyperparameters, per-iteration results output |
 | Agents | `.claude/agents/` | implementor, profiler, analyst, researcher (the Orchestrator is the session itself) |
 | Skill | `.claude/skills/or-iterate/` | interactive mode |
 

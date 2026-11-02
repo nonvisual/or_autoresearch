@@ -9,7 +9,11 @@ under m capacity dimensions) - the problem package under `problems/mdkp/`.
 
 1. **Autonomous**: an external driver invokes you once per iteration
    (`scripts/run_loop.py`, headless). Each invocation performs AT MOST ONE full
-   iteration, then stops. The driver does all bookkeeping after you stop.
+   iteration, then stops. The driver does all bookkeeping after you stop. By
+   default the driver runs IN-PLACE: the repo itself is your working tree and
+   bookkeeping commits go to a `loop/<problem>__<ts>` branch (never main).
+   With `--isolate` it runs in a full-copy throwaway workspace instead
+   (parallel-safe).
 2. **Interactive**: the `/or-iterate` skill in a Claude Code session. You are
    the Orchestrator; run `uv run python scripts/show_digest.py --problem mdkp`
    for orientation, perform ONE iteration per invocation, then run

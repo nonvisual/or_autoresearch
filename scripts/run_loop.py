@@ -1,25 +1,29 @@
 """Run the autoresearch loop autonomously, end-to-end.
 
-    uv run python scripts/run_loop.py
-    uv run python scripts/run_loop.py --iterations 2 --timeout-hours 1
-    uv run python scripts/run_loop.py --dry-run          # assemble only, print tree
-    uv run python scripts/run_loop.py --workspace <ws>   # resume an existing workspace
+    uv run python scripts/run_loop.py                       # IN-PLACE (default)
+    uv run python scripts/run_loop.py --iterations 2        # in-place, 2 iterations
+    uv run python scripts/run_loop.py --dry-run             # print the plan, change nothing
+    uv run python scripts/run_loop.py --isolate             # full-copy workspace (parallel-safe)
+    uv run python scripts/run_loop.py --workspace <ws>      # resume an isolate-mode workspace
+
+IN-PLACE (default): the loop runs directly on this repo - sessions get the
+repo as cwd, evaluations and bookkeeping commit to a dedicated branch
+(loop/<problem>__<ts>, created automatically when started from main/master;
+the tree must be clean). Research state (history.tsv, hypotheses, reference,
+candidates) lives in the repo, so results are never trapped in a copy.
+
+ISOLATE (--isolate): assembles a full-copy workspace under
+loop_runs/<problem>__<UTC ts>/ (parallel-safe, throwaway git history). Use it
+only to run several loops concurrently.
 
 Configuration comes from the repo-root loop.json (problem, iterations, loop
 hyperparameters like idea_pivot_n, per-invocation caps); CLI flags override.
-The config is RE-READ from the host repo at the top of every iteration, so
-editing loop.json retunes a running loop.
-
-Assembles an isolated workspace under loop_runs/<problem>__<UTC ts>/ (the
-whole repo minus run artifacts, including .claude/agents and the skill - but
-not your local .claude/settings.local.json), then drives headless `claude -p`
-invocations - one per iteration - with a generated state digest as the prompt.
-Each invocation is hard-capped: the claude process group is SIGTERMed
-(SIGKILLed after a grace period) when the cap expires, so no orphaned session
-can outlive the driver. After every invocation, autoresearch/bookkeeping.py
-commits the iteration's state. The user's ResearchDirectionsUser.md is synced
-host -> workspace before each invocation (one-way: agents never write it), so
-mid-run idea edits reach the loop.
+The config is RE-READ at the top of every iteration, so editing loop.json
+retunes a running loop. Invocations are headless `claude -p` sessions driven
+by a generated state digest, hard-capped (process-group kill) so nothing
+outlives the driver; results are printed after every iteration and summarized
+at the end. In isolate mode the user's ResearchDirectionsUser.md is synced
+host -> workspace before each invocation (agents never write it).
 """
 
 import argparse
@@ -41,7 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from autoresearch import bookkeeping, digest, hypotheses  # noqa: E402
+from autoresearch import bookkeeping, digest, hypotheses, tsv  # noqa: E402
 from autoresearch.tsv import count_full  # noqa: E402
 
 RSYNC_EXCLUDES = [
@@ -214,6 +218,18 @@ def format_event(line: str) -> str | None:
     return None
 
 
+def summarize_rows(rows: list[dict]) -> str:
+    """One line per full-subset eval - the driver's results log (pure; unit-tested)."""
+    lines = []
+    for r in rows:
+        lines.append(
+            f"  #{r.get('iteration', '?'):>3}  {r.get('candidate_file', '?'):36} "
+            f"score {r.get('score') or '-':>9}  cov {r.get('coverage') or '-':>6}  "
+            f"{r.get('status', '?'):9}  {_shorten(r.get('hypothesis'), 50)}"
+        )
+    return "\n".join(lines)
+
+
 def build_iteration_prompt(digest_text: str, iteration_no: int, total: int,
                            must_pivot: bool = False) -> str:
     """The per-invocation driver prompt (pure; unit-tested)."""
@@ -250,11 +266,14 @@ def sync_user_directions(host_problem_dir: Path, ws_problem_dir: Path) -> bool:
     """One-way host -> workspace copy of the user's idea file (pure; unit-tested).
 
     Agents never write ResearchDirectionsUser.md, so no reverse sync is needed.
+    In-place mode passes the same directory twice - a no-op.
     """
     src = hypotheses.user_directions_path(host_problem_dir)
     if not src.is_file():
         return False
     dst = hypotheses.user_directions_path(ws_problem_dir)
+    if src.resolve() == dst.resolve():
+        return False
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, dst)
     return True
@@ -418,6 +437,10 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
         )
         if rows > prev_rows:
             stalled = 0
+            new_full = tsv.full_rows(tsv.read(problem_dir))[prev_rows:rows]
+            if new_full:
+                print("[driver] results this invocation:")
+                print(summarize_rows(new_full))
             prev_rows = rows
         else:
             stalled += 1
@@ -425,6 +448,12 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
                 print("[driver] aborting: 3 consecutive invocations produced no full eval")
                 return
 
+    full = tsv.full_rows(tsv.read(problem_dir))
+    if full:
+        print(f"[driver] results ({len(full)} full-subset evals):")
+        print(summarize_rows(full))
+        best = max(full, key=lambda r: float(r["score"] or 0.0))
+        print(f"[driver] best: {best.get('candidate_file', '?')} score {best.get('score', '?')}")
     if prev_rows >= iterations:
         print(f"[driver] done: {prev_rows} full iterations")
     else:
@@ -438,6 +467,33 @@ def _resolve(cli_value, cfg: dict, key: str, default):
     return cfg.get(key, default)
 
 
+def current_branch(root: Path) -> str | None:
+    proc = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+        capture_output=True, text=True,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def working_tree_dirty(root: Path) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain"],
+        capture_output=True, text=True,
+    )
+    return bool(proc.stdout.strip())
+
+
+def ensure_loop_branch(root: Path, problem: str) -> str:
+    """In-place mode never auto-commits onto main/master - make a loop branch."""
+    branch = current_branch(root)
+    if branch in ("main", "master"):
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        new_branch = f"loop/{problem}__{ts}"
+        subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", new_branch], check=True)
+        return new_branch
+    return branch or "HEAD"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--iterations", type=int, default=None, help="overrides loop.json")
@@ -448,10 +504,15 @@ def main() -> int:
     parser.add_argument("--claude-cap-minutes", type=float, default=None,
                         help="hard wall-clock cap per claude invocation "
                              "(process-group kill); default loop.json / 20")
-    parser.add_argument("--dry-run", action="store_true", help="assemble only, print tree")
-    parser.add_argument("--assemble-only", action="store_true", help="assemble + git init, no run")
+    parser.add_argument("--isolate", action="store_true",
+                        help="run in a full-copy workspace under loop_runs/ (parallel-safe, "
+                             "throwaway); default: IN-PLACE on this repo - the loop commits "
+                             "to a loop/<problem>__<ts> branch when started from main/master")
+    parser.add_argument("--dry-run", action="store_true", help="print the plan, no changes")
+    parser.add_argument("--assemble-only", action="store_true",
+                        help="(isolate mode) assemble + git init, no run")
     parser.add_argument("--workspace", default=None,
-                        help="resume this existing workspace (skips assembly)")
+                        help="resume this existing isolate-mode workspace (skips assembly)")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -462,6 +523,27 @@ def main() -> int:
     claude_cap_minutes = float(
         _resolve(args.claude_cap_minutes, cfg, "claude_cap_minutes", DEFAULT_CLAUDE_CAP_MINUTES)
     )
+    isolate = args.isolate or args.assemble_only or bool(args.workspace)
+
+    if args.dry_run and not isolate:
+        branch = current_branch(REPO_ROOT)
+        planned = f"loop/{problem}__<ts>" if branch in ("main", "master") else branch
+        print(f"[run_loop] dry run: IN-PLACE on {REPO_ROOT}")
+        print(f"[run_loop] bookkeeping will commit to branch: {planned}")
+        print(f"[run_loop] problem={problem} iterations={iterations} "
+              f"cap={claude_cap_minutes}min turns={max_turns} timeout={timeout_hours}h")
+        print(f"[run_loop] dirty tree: {'YES (refusing at start)' if working_tree_dirty(REPO_ROOT) else 'clean'}")
+        return 0
+
+    if not isolate:
+        if working_tree_dirty(REPO_ROOT):
+            print("error: working tree has uncommitted changes - commit or stash first "
+                  "(the loop commits bookkeeping in-place)")
+            return 2
+        branch = ensure_loop_branch(REPO_ROOT, problem)
+        print(f"[run_loop] mode: IN-PLACE on {REPO_ROOT} (bookkeeping commits to '{branch}')")
+        run_driver(REPO_ROOT, problem, iterations, timeout_hours, max_turns, claude_cap_minutes)
+        return 0
 
     if args.workspace:
         ws = Path(args.workspace).resolve()

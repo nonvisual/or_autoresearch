@@ -18,6 +18,19 @@ def test_claude_command_shape():
     assert "--output-format" in cmd
 
 
+def test_summarize_rows_rendes_results():
+    rows = [
+        {"iteration": "4", "candidate_file": "candidate_dd_beam.py", "score": "0.997137",
+         "coverage": "1.0000", "status": "discarded", "hypothesis": "width-limited MDD beam"},
+        {"iteration": "12", "candidate_file": "candidate_totalorder_widebeam.py",
+         "score": "0.999650", "coverage": "1.0000", "status": "kept",
+         "hypothesis": "make the prune a total order"},
+    ]
+    text = drv.summarize_rows(rows)
+    assert "#  4" in text and "candidate_dd_beam.py" in text and "0.997137" in text
+    assert "kept" in text and "candidate_totalorder_widebeam.py" in text
+
+
 def test_iteration_prompt_text():
     text = drv.build_iteration_prompt("DIGEST", 3, 15)
     assert "Iteration 3/15" in text
@@ -149,6 +162,46 @@ def test_sync_user_directions_one_way(tmp_path):
     drv.sync_user_directions(host, ws)
     assert dst.read_text() == "## U1: idea v2\n"
     assert not (host / "research" / "ResearchDirectionsLLM.md").exists()
+
+
+def test_sync_user_directions_same_dir_is_noop(tmp_path):
+    pd = tmp_path / "problems" / "mdkp"
+    (pd / "research").mkdir(parents=True)
+    (pd / "research" / "ResearchDirectionsUser.md").write_text("## U1: idea\n")
+    assert drv.sync_user_directions(pd, pd) is False  # in-place mode
+
+
+def test_ensure_loop_branch_avoids_main(tmp_path):
+    import subprocess
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    subprocess.run(["git", "-C", str(ws), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", str(ws), "commit", "-q", "--allow-empty", "-m", "init"],
+                   check=True, env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+                                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+                                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"})
+    branch = drv.ensure_loop_branch(ws, "mdkp")
+    assert branch.startswith("loop/mdkp__")  # auto-created off main
+    assert drv.current_branch(ws) == branch
+
+    branch2 = drv.ensure_loop_branch(ws, "mdkp")
+    assert branch2 == branch  # already on a loop branch: reused, not stacked
+
+
+def test_working_tree_dirty(tmp_path):
+    import subprocess
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    subprocess.run(["git", "-C", str(ws), "init", "-q", "-b", "main"], check=True)
+    subprocess.run(["git", "-C", str(ws), "commit", "-q", "--allow-empty", "-m", "init"],
+                   check=True, env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+                                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+                                    "PATH": "/usr/bin:/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"})
+    assert not drv.working_tree_dirty(ws)
+    (ws / "f.txt").write_text("x")
+    assert drv.working_tree_dirty(ws)
 
 
 def test_format_event_renders_tool_use_and_result():
