@@ -1,6 +1,6 @@
 {
   "problem": "mdkp",
-  "updated": "2026-11-01T09:09:53+00:00",
+  "updated": "2026-11-01T19:04:12+00:00",
   "instances": {
     "large_0": {
       "objective": 107005.0,
@@ -11,16 +11,16 @@
       "source": "baseline_mip.py"
     },
     "medium_0": {
-      "objective": 57206.0,
-      "source": "baseline_mip.py"
+      "objective": 57225.0,
+      "source": "candidate_widebeam_polish.py"
     },
     "medium_1": {
       "objective": 56549.0,
       "source": "baseline_mip.py"
     },
     "medium_2": {
-      "objective": 56107.0,
-      "source": "baseline_mip.py"
+      "objective": 56143.0,
+      "source": "candidate_totalorder_widebeam.py"
     },
     "small_0": {
       "objective": 37472.0,
