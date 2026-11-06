@@ -1,6 +1,6 @@
 {
   "problem": "mdkp",
-  "updated": "2026-11-01T19:04:12+00:00",
+  "updated": "2026-11-06T07:21:05+00:00",
   "instances": {
     "large_0": {
       "objective": 107005.0,
@@ -40,6 +40,14 @@
     },
     "tight_1": {
       "objective": 61400.0,
+      "source": "baseline_mip.py"
+    },
+    "strong_tight_0": {
+      "objective": 78846.0,
+      "source": "baseline_mip.py"
+    },
+    "strong_tight_1": {
+      "objective": 78418.0,
       "source": "baseline_mip.py"
     }
   }

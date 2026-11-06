@@ -10,10 +10,12 @@ INSTANCE_CLASSES = {
     "medium": {"n": 250, "m": 10, "corr": "weak",   "alpha": 0.40, "seeds": [0, 1, 2]},
     "large":  {"n": 500, "m": 30, "corr": "strong", "alpha": 0.35, "seeds": [0, 1]},
     "tight":  {"n": 250, "m": 5,  "corr": "none",   "alpha": 0.25, "seeds": [0, 1]},
+    "strong_tight": {"n": 500, "m": 10, "corr": "strong", "alpha": 0.25, "seeds": [0, 1]},
 }
 # Tier intent: small = MIP-provable well under 1s; medium = LP-guided search pays;
 # large = strongly correlated + 30 dims defeats seconds-scale MIP (heuristics shine);
-# tight = low alpha punishes naive greedy fill order.
+# tight = low alpha punishes naive greedy fill order; strong_tight = the classic
+# hard combo (strong correlation + low alpha) that leaves real anytime headroom.
 
 TIME_BUDGETS = [1.0, 5.0]
 # Full eval = 10 instances x 6s budgeted = 60s of solver time (~1.5-2 min wall
@@ -28,5 +30,6 @@ SUBSETS = {
         "medium_0", "medium_1", "medium_2",
         "large_0", "large_1",
         "tight_0", "tight_1",
+        "strong_tight_0", "strong_tight_1",
     },
 }
