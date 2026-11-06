@@ -37,6 +37,18 @@ def test_generator_shapes_and_capacity_formula():
     assert all(w >= 10 for row in inst.weights for w in row)
 
 
+def test_generator_subset_sum_mode():
+    import numpy as np
+
+    from problems.mdkp.generator import make_instance
+
+    inst = make_instance(40, 4, "sum", 0.5, 3)
+    W = np.asarray(inst.weights)
+    assert inst.values == [int(v) for v in W.sum(axis=0)]  # profit = total weight
+    with __import__("pytest").raises(ValueError):
+        make_instance(10, 2, "bogus", 0.5, 0)
+
+
 def test_instance_json_roundtrip():
     inst = make_instance(20, 2, "strong", 0.5, 1)
     clone = MDKPInstance.from_dict(inst.to_dict())

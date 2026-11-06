@@ -31,8 +31,10 @@ def make_instance(n: int, m: int, corr: str, alpha: float, seed: int) -> MDKPIns
         p = np.round(wbar + rng.integers(-(R // 10), R // 10 + 1, size=n))
     elif corr == "strong":   # strongly correlated: profit = mean weight + R/10
         p = np.round(wbar + R // 10)
+    elif corr == "sum":      # subset-sum correlation: profit = total weight (hardest
+        p = W.sum(axis=0)    # classic class - LP bound weak, big integrality gap)
     else:
-        raise ValueError(f"unknown corr {corr!r} (none | weak | strong)")
+        raise ValueError(f"unknown corr {corr!r} (none | weak | strong | sum)")
     p = np.maximum(p, 1).astype(int)
     c = np.maximum(np.floor(alpha * W.sum(axis=1)).astype(int), 1)
     return MDKPInstance(
