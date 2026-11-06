@@ -61,8 +61,16 @@ Run the loop:
   iteration with a generated digest, enforces hard caps, prints results after
   every iteration plus a summary table at the end, and commits bookkeeping to
   a `loop/<problem>__<ts>` branch (created automatically when started from
-  `main`; requires a clean tree). All research state stays in the repo -
-  nothing to extract afterwards. `--dry-run` prints the plan.
+  `main`; requires a clean tree). `--iterations N` runs N NEW full iterations
+  (the target counts from where the current branch's history starts).
+  `--dry-run` prints the plan.
+
+  **`main` carries no research state** - history, hypotheses, knowledge and
+  candidates live on the loop branch each run creates. Starting from `main`
+  begins a fresh research line; to continue an existing one, `git checkout`
+  its loop branch and run there (the driver reuses the branch and appends).
+  Keep or merge loop branches as you like; `research/*` branches archive
+  notable runs.
 - **Autonomous (isolated)**: `uv run python scripts/run_loop.py --isolate`
   runs in a full-copy throwaway workspace under `loop_runs/` - use only to
   run several loops in parallel. `--workspace <dir>` resumes one.

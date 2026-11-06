@@ -1,11 +1,7 @@
 {
   "problem": "mdkp",
-  "updated": "2026-11-06T07:55:56+00:00",
+  "updated": "2026-11-06T08:06:21+00:00",
   "instances": {
-    "medium_0": {
-      "objective": 57225.0,
-      "source": "candidate_widebeam_polish.py"
-    },
     "small_0": {
       "objective": 37472.0,
       "source": "baseline_mip.py"
@@ -40,6 +36,10 @@
     },
     "xlarge_tight_0": {
       "objective": 152708.0,
+      "source": "baseline_mip.py"
+    },
+    "medium_0": {
+      "objective": 57206.0,
       "source": "baseline_mip.py"
     }
   }

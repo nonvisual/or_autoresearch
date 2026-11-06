@@ -368,21 +368,28 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
     host_problem_dir = REPO_ROOT / "problems" / problem
     deadline = time.monotonic() + timeout_hours * 3600
     stalled = 0
-    prev_rows = count_full(problem_dir)
+    # iterations counts NEW full-subset rows for THIS run; history.tsv carries
+    # every past run's rows (in-place mode), so the target is start_rows + N.
+    start_rows = count_full(problem_dir)
+    target_rows = start_rows + iterations
+    prev_rows = start_rows
     env_config = load_env_config()
     langfuse = langfuse_config(env_config)
     telemetry_down_notice = False
     cmd = claude_command(max_turns)
+    print(f"[driver] {start_rows} historical full iterations; running {iterations} more "
+          f"(target {target_rows})")
 
-    while prev_rows < iterations and time.monotonic() < deadline:
+    while prev_rows < target_rows and time.monotonic() < deadline:
         cfg = load_config()  # host config, re-read every iteration
         hyper = hyper_of(cfg)
         sync_user_directions(host_problem_dir, problem_dir)
 
+        done = prev_rows - start_rows  # this run's completed iterations
         pivot = hypotheses.pivot_state(problem_dir, int(hyper.get("idea_pivot_n", 3)))
-        digest_text = digest.build(problem_dir, iterations, hyper)
+        digest_text = digest.build(problem_dir, target_rows, hyper)
         prompt = build_iteration_prompt(
-            digest_text, prev_rows + 1, iterations, must_pivot=pivot["must_pivot"]
+            digest_text, done + 1, iterations, must_pivot=pivot["must_pivot"]
         )
         # Env is rebuilt per iteration so every session's traces carry the
         # current loop context (workspace, iteration number) as attributes.
@@ -401,13 +408,13 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
             "service.name": "or-autoresearch",
             "loop.problem": problem,
             "loop.workspace": ws.name,
-            "loop.iteration": str(prev_rows + 1),
+            "loop.iteration": str(done + 1),
         }) if live else {}
         env = session_env(ws, env_config, telemetry)
         # Post-mortem artifact: the prompt itself is delivered via stdin, but
         # the file records exactly what the session was told.
         (ws / ".driver_prompt.txt").write_text(prompt)
-        print(f"[driver] invoking claude for iteration {prev_rows + 1}/{iterations}")
+        print(f"[driver] invoking claude for iteration {done + 1}/{iterations}")
         if live:
             print(f"[driver] telemetry: langfuse at {langfuse['host']} (loop.* attributes)")
         rc, timed_out, wall_s, _ = run_claude(ws, cmd, prompt, claude_cap_minutes, env)
@@ -449,15 +456,17 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
                 return
 
     full = tsv.full_rows(tsv.read(problem_dir))
-    if full:
-        print(f"[driver] results ({len(full)} full-subset evals):")
-        print(summarize_rows(full))
-        best = max(full, key=lambda r: float(r["score"] or 0.0))
-        print(f"[driver] best: {best.get('candidate_file', '?')} score {best.get('score', '?')}")
-    if prev_rows >= iterations:
-        print(f"[driver] done: {prev_rows} full iterations")
+    run_rows = full[start_rows:]
+    if run_rows:
+        print(f"[driver] results this run ({len(run_rows)} full-subset evals):")
+        print(summarize_rows(run_rows))
+        best = max(run_rows, key=lambda r: float(r["score"] or 0.0))
+        print(f"[driver] best this run: {best.get('candidate_file', '?')} score {best.get('score', '?')}")
+    done = prev_rows - start_rows
+    if done >= iterations:
+        print(f"[driver] done: {done} full iterations this run ({prev_rows} total in history)")
     else:
-        print(f"[driver] timeout reached with {prev_rows}/{iterations} iterations")
+        print(f"[driver] timeout reached with {done}/{iterations} iterations this run")
 
 
 def _resolve(cli_value, cfg: dict, key: str, default):
