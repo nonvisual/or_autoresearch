@@ -1,26 +1,10 @@
 {
   "problem": "mdkp",
-  "updated": "2026-11-06T07:46:10+00:00",
+  "updated": "2026-11-06T07:55:56+00:00",
   "instances": {
-    "large_0": {
-      "objective": 107005.0,
-      "source": "baseline_mip.py"
-    },
-    "large_1": {
-      "objective": 107628.0,
-      "source": "baseline_mip.py"
-    },
     "medium_0": {
       "objective": 57225.0,
       "source": "candidate_widebeam_polish.py"
-    },
-    "medium_1": {
-      "objective": 56549.0,
-      "source": "baseline_mip.py"
-    },
-    "medium_2": {
-      "objective": 56143.0,
-      "source": "candidate_totalorder_widebeam.py"
     },
     "small_0": {
       "objective": 37472.0,
@@ -42,20 +26,20 @@
       "objective": 214425.0,
       "source": "baseline_mip.py"
     },
-    "subsetsum_0": {
-      "objective": 1263855.0,
-      "source": "baseline_mip.py"
-    },
-    "subsetsum_1": {
-      "objective": 1261960.0,
-      "source": "baseline_mip.py"
-    },
     "xxlarge_0": {
       "objective": 429746.0,
       "source": "baseline_mip.py"
     },
     "subsetsum_hard_0": {
       "objective": 4520691.0,
+      "source": "baseline_mip.py"
+    },
+    "huge_0": {
+      "objective": 1075873.0,
+      "source": "baseline_mip.py"
+    },
+    "xlarge_tight_0": {
+      "objective": 152708.0,
       "source": "baseline_mip.py"
     }
   }
