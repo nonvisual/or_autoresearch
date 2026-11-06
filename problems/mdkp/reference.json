@@ -26,22 +26,6 @@
       "objective": 37472.0,
       "source": "baseline_mip.py"
     },
-    "small_1": {
-      "objective": 36538.0,
-      "source": "baseline_mip.py"
-    },
-    "small_2": {
-      "objective": 32260.0,
-      "source": "baseline_mip.py"
-    },
-    "tight_0": {
-      "objective": 60879.0,
-      "source": "baseline_mip.py"
-    },
-    "tight_1": {
-      "objective": 61400.0,
-      "source": "baseline_mip.py"
-    },
     "strong_tight_0": {
       "objective": 78846.0,
       "source": "baseline_mip.py"

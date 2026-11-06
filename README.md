@@ -161,6 +161,23 @@ troubleshooting. To correlate a trace with the on-disk loop state, match
 `loop.workspace` + `loop.iteration` against the workspace's
 `.driver_prompt.txt` and `driver_log.jsonl`.
 
+### Cost tracking
+
+Langfuse's token/cost columns stay empty for Claude Code sessions for now
+(Claude Code emits plain `input_tokens`/`output_tokens` attribute names;
+Langfuse waits for `gen_ai.usage.*`). For cost visibility today, use a local
+tool that reads Claude Code's own session data instead - no exporter involved:
+
+- [CodeBurn](https://github.com/getagentseal/codeburn) - free, fully local
+  CLI; prices every call (input/output/cache/web-search tokens) from
+  LiteLLM rates refreshed daily; tracks 37+ coding tools including Claude
+  Code.
+- [AgentsView](https://agentsview.io) - local viewer for what each agent
+  session did and what it cost: file edits, tool calls, child sessions,
+  per-tool/model breakdowns, cache economics; ships read-only MCP tools.
+
+Both pair well with Langfuse: traces there, money here.
+
 ## Adding a problem
 
 ```bash
