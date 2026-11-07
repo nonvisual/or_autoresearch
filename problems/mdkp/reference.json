@@ -1,17 +1,9 @@
 {
   "problem": "mdkp",
-  "updated": "2026-11-06T08:06:21+00:00",
+  "updated": "2026-11-07T10:46:36+00:00",
   "instances": {
     "small_0": {
       "objective": 37472.0,
-      "source": "baseline_mip.py"
-    },
-    "strong_tight_0": {
-      "objective": 78846.0,
-      "source": "baseline_mip.py"
-    },
-    "strong_tight_1": {
-      "objective": 78418.0,
       "source": "baseline_mip.py"
     },
     "xlarge_0": {
@@ -22,16 +14,8 @@
       "objective": 214425.0,
       "source": "baseline_mip.py"
     },
-    "xxlarge_0": {
-      "objective": 429746.0,
-      "source": "baseline_mip.py"
-    },
     "subsetsum_hard_0": {
       "objective": 4520691.0,
-      "source": "baseline_mip.py"
-    },
-    "huge_0": {
-      "objective": 1075873.0,
       "source": "baseline_mip.py"
     },
     "xlarge_tight_0": {
@@ -40,6 +24,18 @@
     },
     "medium_0": {
       "objective": 57206.0,
+      "source": "baseline_mip.py"
+    },
+    "m100_tight_0": {
+      "objective": 241483.0,
+      "source": "baseline_mip.py"
+    },
+    "m100_xtight_0": {
+      "objective": 90453.0,
+      "source": "baseline_mip.py"
+    },
+    "sum100_0": {
+      "objective": 24978783.0,
       "source": "baseline_mip.py"
     }
   }
