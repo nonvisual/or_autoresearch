@@ -102,6 +102,11 @@ def process(ws: Path, problem: str) -> list[str]:
     problem_dir = ws / "problems" / problem
     state = load_state(ws)
     rows = tsv.read(problem_dir)
+    if state["rows_seen"] > len(rows):
+        # History shrank below the checkpoint (research state reset, branch
+        # switch to a shorter line): the checkpoint refers to a past history
+        # that no longer exists, so reprocess everything present.
+        state["rows_seen"] = 0
     new = rows[state["rows_seen"]:]
     if not new:
         new = []

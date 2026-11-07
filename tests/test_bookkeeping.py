@@ -85,6 +85,20 @@ def test_fallback_note_when_session_did_not_enrich(tmp_path):
     assert "discarded" in notes.read_text()
 
 
+def test_stale_checkpoint_after_history_reset_is_reprocessed(tmp_path):
+    ws = _make_ws(tmp_path)
+    problem_dir = ws / "problems" / "mdkp"
+    candidate = problem_dir / "candidates" / "candidate_x.py"
+    candidate.write_text("# candidate\n")
+    _full_row(problem_dir, "candidate_x.py", "kept")
+    # checkpoint from a LONGER past history (e.g. before a research-state
+    # reset): rows_seen must not swallow the rows that exist now
+    bookkeeping.save_state(ws, {"rows_seen": 41})
+    actions = bookkeeping.process(ws, "mdkp")
+    assert any("feat commit" in a for a in actions)  # row processed despite stale checkpoint
+    assert bookkeeping.load_state(ws) == {"rows_seen": 1}
+
+
 def test_no_fallback_note_when_session_enriched(tmp_path):
     ws = _make_ws(tmp_path)
     problem_dir = ws / "problems" / "mdkp"
