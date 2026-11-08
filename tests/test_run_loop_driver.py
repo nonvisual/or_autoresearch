@@ -1,11 +1,6 @@
 """Driver pure functions: command, prompt (incl. pivot line), env, sync, telemetry."""
 
 import base64
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 import scripts.run_loop as drv
 
@@ -171,16 +166,8 @@ def test_sync_user_directions_same_dir_is_noop(tmp_path):
     assert drv.sync_user_directions(pd, pd) is False  # in-place mode
 
 
-def test_ensure_loop_branch_avoids_main(tmp_path):
-    import subprocess
-
-    ws = tmp_path / "repo"
-    ws.mkdir()
-    subprocess.run(["git", "-C", str(ws), "init", "-q", "-b", "main"], check=True)
-    subprocess.run(["git", "-C", str(ws), "commit", "-q", "--allow-empty", "-m", "init"],
-                   check=True, env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
-                                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
-                                    "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"})
+def test_ensure_loop_branch_avoids_main(tmp_path, make_git_repo):
+    ws = make_git_repo(tmp_path / "repo")
     branch = drv.ensure_loop_branch(ws, "mdkp")
     assert branch.startswith("loop/mdkp__")  # auto-created off main
     assert drv.current_branch(ws) == branch
@@ -189,16 +176,8 @@ def test_ensure_loop_branch_avoids_main(tmp_path):
     assert branch2 == branch  # already on a loop branch: reused, not stacked
 
 
-def test_working_tree_dirty(tmp_path):
-    import subprocess
-
-    ws = tmp_path / "repo"
-    ws.mkdir()
-    subprocess.run(["git", "-C", str(ws), "init", "-q", "-b", "main"], check=True)
-    subprocess.run(["git", "-C", str(ws), "commit", "-q", "--allow-empty", "-m", "init"],
-                   check=True, env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
-                                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
-                                    "PATH": "/usr/bin:/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin"})
+def test_working_tree_dirty(tmp_path, make_git_repo):
+    ws = make_git_repo(tmp_path / "repo")
     assert not drv.working_tree_dirty(ws)
     (ws / "f.txt").write_text("x")
     assert drv.working_tree_dirty(ws)

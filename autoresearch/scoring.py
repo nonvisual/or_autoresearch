@@ -49,7 +49,7 @@ def score_rows(rows: list[dict], reference: dict[str, float], sense: str = SENSE
         b_rows = [r for r in rows if r["budget"] == b]
         scores = []
         for r in b_rows:
-            if r["status"] in {s.value for s in STATES_SCORED_ZERO}:
+            if r["status"] in STATES_SCORED_ZERO:
                 scores.append(0.0)
             else:
                 scores.append(instance_score(reference[r["instance"]], r["objective"], sense))

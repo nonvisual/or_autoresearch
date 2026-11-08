@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from autoresearch import hypotheses, reference, tsv
+from autoresearch.textutil import one_line
 
 STATE_FILE = ".driver_state.json"
 
@@ -62,11 +63,6 @@ def _dirty(ws: Path, path: Path) -> bool:
     return bool(proc.stdout.strip())
 
 
-def _sanitize(text: str, limit: int = 72) -> str:
-    single = " ".join(str(text or "").split())
-    return single if len(single) <= limit else single[: limit - 3] + "..."
-
-
 def _stage_and_commit(ws: Path, paths: list[Path], message: str) -> bool:
     existing = [p for p in paths if p.exists()]
     if not existing:
@@ -91,7 +87,7 @@ def _append_note(notes: Path, row: dict) -> None:
     hid = row.get("hypothesis_id") or "-"
     line = (
         f"- #{row.get('iteration', '?')} {hid} {row.get('status', '?')} "
-        f"{row.get('score') or '-'} - {_sanitize(row.get('hypothesis'), 60)}"
+        f"{row.get('score') or '-'} - {one_line(row.get('hypothesis'), 60)}"
     )
     with notes.open("a") as f:
         f.write(line + "\n")
@@ -108,8 +104,6 @@ def process(ws: Path, problem: str) -> list[str]:
         # that no longer exists, so reprocess everything present.
         state["rows_seen"] = 0
     new = rows[state["rows_seen"]:]
-    if not new:
-        new = []
     actions: list[str] = []
     research_dir = problem_dir / "research"
     notes = research_dir / "notes" / "iterations.md"
@@ -136,7 +130,7 @@ def process(ws: Path, problem: str) -> list[str]:
                 ok = _stage_and_commit(
                     ws,
                     [candidate, ref_path, research_dir],
-                    f"feat({problem}): {_sanitize(hypothesis)}",
+                    f"feat({problem}): {one_line(hypothesis, 72)}",
                 )
                 if ok:
                     actions.append(f"kept {label} -> feat commit")

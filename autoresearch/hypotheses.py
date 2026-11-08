@@ -22,12 +22,18 @@ Never hand-edit: ``scripts/hypothesis.py`` and ``evaluation/eval_solver.py``
 are the only writers.
 """
 
-import csv
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from autoresearch.tsv import DISCARDED, FULL, KEPT
+from autoresearch.tsv import (
+    DISCARDED,
+    FULL,
+    KEPT,
+    append_row,
+    read_table,
+    rewrite_table,
+)
 
 COLUMNS = [
     "id",
@@ -79,17 +85,8 @@ def parse_idea_heads(path: Path) -> list[tuple[str, str]]:
     return heads
 
 
-def _clean(value) -> str:
-    return str(value).replace("\t", " ").replace("\n", " ").strip()
-
-
 def append(problem_dir: Path, row: dict) -> dict:
     """Append one hypothesis row; assigns the next H<n> id and status=proposed."""
-    path = path_for(problem_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
-        path.write_text("\t".join(COLUMNS) + "\n")
-
     existing = read(problem_dir)
     n = 0
     for r in existing:
@@ -108,17 +105,12 @@ def append(problem_dir: Path, row: dict) -> dict:
         "notes": "",
         **row,
     }
-    with path.open("a", newline="") as f:
-        f.write("\t".join(_clean(full[c]) for c in COLUMNS) + "\n")
+    append_row(path_for(problem_dir), COLUMNS, full)
     return full
 
 
 def read(problem_dir: Path) -> list[dict]:
-    path = path_for(problem_dir)
-    if not path.exists():
-        return []
-    with path.open(newline="") as f:
-        return [dict(r) for r in csv.DictReader(f, delimiter="\t") if any(r.values())]
+    return read_table(path_for(problem_dir))
 
 
 def by_id(problem_dir: Path, hyp_id: str) -> dict | None:
@@ -128,16 +120,9 @@ def by_id(problem_dir: Path, hyp_id: str) -> dict | None:
     return None
 
 
-def _rewrite(problem_dir: Path, rows: list[dict]) -> None:
-    path = path_for(problem_dir)
-    with path.open("w", newline="") as f:
-        f.write("\t".join(COLUMNS) + "\n")
-        for r in rows:
-            f.write("\t".join(_clean(r[c]) for c in COLUMNS) + "\n")
-
-
-def set_status(problem_dir: Path, hyp_id: str, status: str, score: str = "") -> dict:
-    """Rewrite one row's status (and score). Returns the updated row."""
+def set_status(problem_dir: Path, hyp_id: str, status: str, score: str = "",
+               fields: dict | None = None) -> dict:
+    """Rewrite one row's status (plus score / extra fields). Returns the updated row."""
     rows = read(problem_dir)
     updated = {}
     for r in rows:
@@ -145,10 +130,12 @@ def set_status(problem_dir: Path, hyp_id: str, status: str, score: str = "") -> 
             r["status"] = status
             if score != "":
                 r["score"] = score
+            if fields:
+                r.update(fields)
             updated = r
     if not updated:
         raise KeyError(f"hypothesis {hyp_id} not found")
-    _rewrite(problem_dir, rows)
+    rewrite_table(path_for(problem_dir), COLUMNS, rows)
     return updated
 
 
@@ -158,13 +145,7 @@ def mark_running(problem_dir: Path, hyp_id: str, candidate_file: str) -> dict:
         raise KeyError(f"hypothesis {hyp_id} not found")
     if row["status"] in TERMINAL:
         raise ValueError(f"hypothesis {hyp_id} is already {row['status']}")
-    rows = read(problem_dir)
-    for r in rows:
-        if r.get("id") == hyp_id:
-            r["status"] = RUNNING
-            r["candidate_file"] = candidate_file
-    _rewrite(problem_dir, rows)
-    return by_id(problem_dir, hyp_id) or {}
+    return set_status(problem_dir, hyp_id, RUNNING, fields={"candidate_file": candidate_file})
 
 
 def resolve_from_history(problem_dir: Path, history_row: dict) -> str | None:

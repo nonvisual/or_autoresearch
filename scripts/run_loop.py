@@ -46,7 +46,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from autoresearch import bookkeeping, digest, hypotheses, tsv  # noqa: E402
+from autoresearch.config import load_config, hyper_of  # noqa: E402
 from autoresearch.tsv import count_full  # noqa: E402
+from autoresearch.textutil import one_line  # noqa: E402
 
 RSYNC_EXCLUDES = [
     ".git", ".venv", "__pycache__", ".pytest_cache", ".DS_Store",
@@ -61,20 +63,6 @@ DEFAULT_TIMEOUT_HOURS = 12.0
 KILL_GRACE_S = 30
 
 ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE_", "LANGFUSE_", "OTEL_")
-
-HYPER_KEYS = ("idea_pivot_n", "new_idea_every_n", "max_hypotheses_per_idea", "plateau_window")
-
-
-def load_config(root: Path = REPO_ROOT) -> dict:
-    path = root / "loop.json"
-    if not path.is_file():
-        print(f"error: {path} missing")
-        sys.exit(2)
-    return json.loads(path.read_text())
-
-
-def hyper_of(cfg: dict) -> dict:
-    return {k: cfg[k] for k in HYPER_KEYS if k in cfg}
 
 
 def load_env_config(env_path: Path = REPO_ROOT / ".env") -> dict[str, str]:
@@ -183,8 +171,7 @@ def claude_command(max_turns: int) -> list[str]:
 
 
 def _shorten(text: str, limit: int = 70) -> str:
-    single = " ".join(str(text or "").split())
-    return single if len(single) <= limit else single[: limit - 3] + "..."
+    return one_line(text, limit)
 
 
 def format_event(line: str) -> str | None:
@@ -307,13 +294,11 @@ def _kill_group(proc: subprocess.Popen, grace_s: int = KILL_GRACE_S) -> None:
     proc.wait()
 
 
-def run_claude(ws: Path, cmd: list[str], prompt: str, cap_minutes: float, env: dict,
-               stream: bool = True) -> tuple:
+def run_claude(ws: Path, cmd: list[str], prompt: str, cap_minutes: float, env: dict) -> tuple:
     """One headless invocation with a hard wall-clock cap.
 
-    Streams ``[claude] ...`` progress lines as events arrive (``stream=False``
-    silences printing). Returns (rc, timed_out, wall_s, output) where output is
-    the raw stream-json text.
+    Prints ``[claude] ...`` progress lines as stream-json events arrive.
+    Returns (rc, timed_out, wall_s).
     """
     t0 = time.monotonic()
     timed_out = False
@@ -321,7 +306,6 @@ def run_claude(ws: Path, cmd: list[str], prompt: str, cap_minutes: float, env: d
         cmd, cwd=str(ws), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         env=env, start_new_session=True, text=True,
     )
-    output: list[str] = []
 
     def _feed() -> None:
         try:
@@ -332,11 +316,9 @@ def run_claude(ws: Path, cmd: list[str], prompt: str, cap_minutes: float, env: d
 
     def _read() -> None:
         for line in proc.stdout:
-            output.append(line)
-            if stream:
-                rendered = format_event(line)
-                if rendered:
-                    print(rendered, flush=True)
+            rendered = format_event(line)
+            if rendered:
+                print(rendered, flush=True)
 
     threading.Thread(target=_feed, daemon=True).start()
     reader = threading.Thread(target=_read, daemon=True)
@@ -350,7 +332,7 @@ def run_claude(ws: Path, cmd: list[str], prompt: str, cap_minutes: float, env: d
         proc.wait()
     reader.join(timeout=5)
     wall_s = time.monotonic() - t0
-    return proc.returncode, timed_out, wall_s, "".join(output)
+    return proc.returncode, timed_out, wall_s
 
 
 def _log_invocation(ws: Path, **entry) -> None:
@@ -381,13 +363,13 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
           f"(target {target_rows})")
 
     while prev_rows < target_rows and time.monotonic() < deadline:
-        cfg = load_config()  # host config, re-read every iteration
+        cfg = load_config(REPO_ROOT)  # host config, re-read every iteration
         hyper = hyper_of(cfg)
         sync_user_directions(host_problem_dir, problem_dir)
 
         done = prev_rows - start_rows  # this run's completed iterations
         pivot = hypotheses.pivot_state(problem_dir, int(hyper.get("idea_pivot_n", 3)))
-        digest_text = digest.build(problem_dir, target_rows, hyper)
+        digest_text = digest.build(problem_dir, target_rows, hyper, pivot=pivot)
         prompt = build_iteration_prompt(
             digest_text, done + 1, iterations, must_pivot=pivot["must_pivot"]
         )
@@ -417,7 +399,7 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
         print(f"[driver] invoking claude for iteration {done + 1}/{iterations}")
         if live:
             print(f"[driver] telemetry: langfuse at {langfuse['host']} (loop.* attributes)")
-        rc, timed_out, wall_s, _ = run_claude(ws, cmd, prompt, claude_cap_minutes, env)
+        rc, timed_out, wall_s = run_claude(ws, cmd, prompt, claude_cap_minutes, env)
         if rc != 0:
             print(f"[driver] claude exited with {rc}")
 
@@ -460,8 +442,9 @@ def run_driver(ws: Path, problem: str, iterations: int, timeout_hours: float,
     if run_rows:
         print(f"[driver] results this run ({len(run_rows)} full-subset evals):")
         print(summarize_rows(run_rows))
-        best = max(run_rows, key=lambda r: float(r["score"] or 0.0))
-        print(f"[driver] best this run: {best.get('candidate_file', '?')} score {best.get('score', '?')}")
+        best = tsv.best_row(run_rows)
+        if best:
+            print(f"[driver] best this run: {best.get('candidate_file', '?')} score {best.get('score', '?')}")
     done = prev_rows - start_rows
     if done >= iterations:
         print(f"[driver] done: {done} full iterations this run ({prev_rows} total in history)")
@@ -524,9 +507,9 @@ def main() -> int:
                         help="resume this existing isolate-mode workspace (skips assembly)")
     args = parser.parse_args()
 
-    cfg = load_config()
+    cfg = load_config(REPO_ROOT)
     problem = cfg.get("problem", "mdkp")
-    iterations = args.iterations or cfg.get("iterations", 15)
+    iterations = int(_resolve(args.iterations, cfg, "iterations", 15))
     timeout_hours = _resolve(args.timeout_hours, cfg, "timeout_hours", DEFAULT_TIMEOUT_HOURS)
     max_turns = int(_resolve(args.max_turns, cfg, "max_turns", DEFAULT_MAX_TURNS))
     claude_cap_minutes = float(

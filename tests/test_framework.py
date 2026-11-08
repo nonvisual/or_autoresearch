@@ -1,17 +1,15 @@
 """Framework units: scoring (senses + registry), tsv, reference, harness."""
 
 import json
-import sys
 import time
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 import pytest
 
 from autoresearch import harness, reference, scoring, tsv
 from problems.mdkp.generator import make_instance
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _rows():
@@ -105,11 +103,22 @@ def test_tsv_roundtrip_with_hypothesis_id(tmp_path):
     assert tsv.best_score(rows) == pytest.approx(1.0)
 
 
-def test_tsv_plateau():
-    rows = [{"score": "1.0", "subset": "full"}] * 3 + [{"score": "1.0", "subset": "full"}] * 4
-    assert tsv.plateau(rows, window=4)  # no improvement in the last 4
-    rows2 = [{"score": "1.0", "subset": "full"}] * 3 + [{"score": "1.2", "subset": "full"}] * 4
-    assert not tsv.plateau(rows2, window=4)
+def test_tsv_append_reuses_preloaded_rows(tmp_path):
+    tsv.append(tmp_path, {"subset": "full", "status": "kept", "score": "1.0"})
+    rows = tsv.read(tmp_path)
+    second = tsv.append(tmp_path, {"subset": "full", "status": "kept", "score": "0.9"},
+                        existing=rows)
+    assert second["iteration"] == 2  # id assigned from the preloaded rows
+    assert len(tsv.read(tmp_path)) == 2
+
+
+def test_tsv_best_row_picks_highest_score(tmp_path):
+    tsv.append(tmp_path, {"score": "0.5", "subset": "full"})
+    tsv.append(tmp_path, {"score": "0.9", "subset": "full"})
+    rows = tsv.read(tmp_path)
+    assert tsv.best_score(rows) == pytest.approx(0.9)
+    assert tsv.best_row(rows)["score"] == "0.9"
+    assert tsv.best_row([{"score": ""}]) is None
 
 
 def test_reference_update_max_strict_improvements(tmp_path):

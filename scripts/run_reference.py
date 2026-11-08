@@ -11,17 +11,15 @@ up as ratios below 1.0 rather than shifting the scale).
 
 import argparse
 import importlib
-import json
 import sys
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from autoresearch import harness, reference, scoring  # noqa: E402
+from autoresearch import harness, reference, runs, scoring  # noqa: E402
 
 
 def main() -> int:
@@ -46,15 +44,9 @@ def main() -> int:
 
     cfg = importlib.import_module(f"problems.{args.problem}.benchmark_config")
     sense = getattr(cfg, "SENSE", scoring.SENSE_MIN)
-    budgets = (
-        [float(b) for b in args.budgets.split(",")]
-        if args.budgets
-        else [float(b) for b in cfg.TIME_BUDGETS]
-    )
+    budgets = runs.parse_budgets(args.budgets, cfg)
     instances = harness.load_instances(args.problem, args.subset, REPO_ROOT)
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = REPO_ROOT / "runs" / run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = runs.new_run_dir(REPO_ROOT)
 
     best: dict[str, float] = {}
     sources: dict[str, str] = {}
@@ -74,8 +66,9 @@ def main() -> int:
                 best[name] = obj
                 sources[name] = solver_file.name
 
-    (out_dir / "results.json").write_text(
-        json.dumps({"problem": args.problem, "subset": args.subset, "rows": all_rows}, indent=2) + "\n"
+    runs.write_json(
+        out_dir / "results.json",
+        {"problem": args.problem, "subset": args.subset, "rows": all_rows},
     )
     missing = [i.name for i in instances if i.name not in best]
     if missing:

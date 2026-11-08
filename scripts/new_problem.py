@@ -35,7 +35,8 @@ def main() -> int:
     print(f"     (at least one must be feasible on every instance)")
     print(f"  3. optional: bounds.py (bound(instance) for the battery --full check), scorers.py (custom scorers)")
     print(f"  4. uv run python -m problems.{args.name}.generator")
-    print(f"  5. uv run python scripts/run_reference.py --problem {args.name} --subset full")
+    print(f"  5. uv run python scripts/run_reference.py --problem {args.name} --subset full"
+          " --budgets <stronger than TIME_BUDGETS>")
     print(f"  6. point loop.json 'problem' at '{args.name}' and start the loop - see AGENTS.md")
     return 0
 

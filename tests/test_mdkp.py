@@ -1,12 +1,9 @@
 """mdkp problem package: generator, evaluator, brute-force checks, baselines."""
 
 import itertools
-import sys
-from pathlib import Path
+import math
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
-
+import numpy as np
 import pytest
 
 from problems.mdkp.bounds import bound as lp_bound
@@ -28,8 +25,6 @@ def test_generator_shapes_and_capacity_formula():
     assert inst.n == 50 and inst.m == 4
     assert len(inst.values) == 50
     assert len(inst.weights) == 4 and all(len(row) == 50 for row in inst.weights)
-    import math
-
     for i in range(4):
         expected = max(int(math.floor(0.35 * sum(inst.weights[i]))), 1)
         assert inst.capacities[i] == expected
@@ -38,14 +33,10 @@ def test_generator_shapes_and_capacity_formula():
 
 
 def test_generator_subset_sum_mode():
-    import numpy as np
-
-    from problems.mdkp.generator import make_instance
-
     inst = make_instance(40, 4, "sum", 0.5, 3)
     W = np.asarray(inst.weights)
     assert inst.values == [int(v) for v in W.sum(axis=0)]  # profit = total weight
-    with __import__("pytest").raises(ValueError):
+    with pytest.raises(ValueError):
         make_instance(10, 2, "bogus", 0.5, 0)
 
 

@@ -39,6 +39,8 @@ reference sources, e.g. `## L7 (=U2+L3):`), `hypotheses.tsv`,
 
 - [ ] implement the five files above
 - [ ] `uv run python -m problems.<name>.generator`
-- [ ] `uv run python scripts/run_reference.py --problem <name> --subset full`
+- [ ] `uv run python scripts/run_reference.py --problem <name> --subset full --budgets <stronger than TIME_BUDGETS>`
+      (stronger reference budgets anchor the ratio scores - see the header of
+      `scripts/run_reference.py`)
 - [ ] set `"problem": "<name>"` in loop.json
 - [ ] `uv run python scripts/run_loop.py --dry-run`

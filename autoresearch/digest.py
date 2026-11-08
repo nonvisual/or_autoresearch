@@ -11,6 +11,7 @@ inside the problem package.
 from pathlib import Path
 
 from autoresearch import hypotheses, reference, tsv
+from autoresearch.textutil import one_line
 
 TAIL_ROWS = 5
 LLM_HEADS = 8
@@ -41,16 +42,23 @@ def kept_recent(rows: list[dict], k: int = 3) -> list[dict]:
 
 
 def _trunc(value: str, limit: int = 60) -> str:
-    text = " ".join(str(value or "").split())
-    return text if len(text) <= limit else text[: limit - 3] + "..."
+    return one_line(value, limit)
 
 
-def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
-    """Render the digest text for the current state of one problem package."""
+def build(problem_dir: Path, target: int, hyper: dict | None = None,
+          pivot: dict | None = None) -> str:
+    """Render the digest text for the current state of one problem package.
+
+    ``pivot``: an already-computed ``hypotheses.pivot_state`` result (the driver
+    has one; passing it saves a re-read and guarantees the same state).
+    """
     hyper = hyper or {}
     pivot_n = int(hyper.get("idea_pivot_n", 3))
     new_idea_every = hyper.get("new_idea_every_n")
+    max_per_idea = hyper.get("max_hypotheses_per_idea")
     rows = tsv.read(problem_dir)
+    hyp_rows = hypotheses.read(problem_dir)
+    terminal = [r for r in hyp_rows if r.get("status") in hypotheses.TERMINAL]
     full = tsv.full_rows(rows)
     problem = problem_dir.name
     lines: list[str] = [
@@ -60,7 +68,7 @@ def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
         f"Full-subset iterations: {len(full)}/{target} complete.",
     ]
 
-    st = hypotheses.pivot_state(problem_dir, pivot_n)
+    st = pivot if pivot is not None else hypotheses.pivot_state(problem_dir, pivot_n)
     if st["current_idea"] is None:
         lines.append("No terminal hypotheses yet - pick any idea (prefer an untried user idea U*).")
     elif st["must_pivot"]:
@@ -72,6 +80,12 @@ def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
         lines.append(
             f"Current idea: {st['current_idea']} - {st['consecutive_discards']} discard(s) in a "
             f"row (pivot after {pivot_n})."
+        )
+    if max_per_idea is not None:
+        tried = sum(1 for r in terminal if r.get("idea_refs") == st["current_idea"])
+        lines.append(
+            f"Hypotheses under the current idea: {tried}/{int(max_per_idea)} "
+            "(max_hypotheses_per_idea - once at the cap, prefer a different idea)."
         )
     if new_idea_every and full and len(full) % int(new_idea_every) == 0:
         lines.append(f"Nudge: every {int(new_idea_every)} iterations, consider proposing a NEW idea.")
@@ -92,7 +106,6 @@ def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
     else:
         lines.append("  (none yet)")
 
-    terminal = [r for r in hypotheses.read(problem_dir) if r.get("status") in hypotheses.TERMINAL]
     if terminal:
         lines.append("")
         lines.append("Recent hypotheses (newest first):")
@@ -108,7 +121,7 @@ def build(problem_dir: Path, target: int, hyper: dict | None = None) -> str:
     else:
         lines.append("No kept candidates yet - the first full evals set the bar.")
 
-    open_hyps = [r for r in hypotheses.read(problem_dir)
+    open_hyps = [r for r in hyp_rows
                  if r.get("status") in (hypotheses.PROPOSED, hypotheses.RUNNING)]
     if open_hyps:
         lines.append("")

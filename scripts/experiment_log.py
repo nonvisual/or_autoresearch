@@ -19,11 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from autoresearch import hypotheses as hyp, tsv  # noqa: E402
-
-
-def _one(text: str, limit: int) -> str:
-    single = " ".join(str(text or "").split())
-    return single if len(single) <= limit else single[: limit - 3] + "..."
+from autoresearch.textutil import one_line  # noqa: E402
 
 
 def load_experiment_log(problem_dir: Path, full_only: bool = False) -> list[dict]:
@@ -51,12 +47,10 @@ def render(rows: list[dict]) -> str:
             f"{r.get('htype') or '-':4} {(r.get('candidate_file') or '-')[:34]:34} "
             f"{r.get('score') or '-':>9} {r.get('delta') or '-':>9} "
             f"{r.get('coverage') or '-':>6}  {r.get('status') or '-':9} "
-            f"{_one(r.get('learnings'), 44)}"
+            f"{one_line(r.get('learnings'), 44)}"
         )
-    full = [r for r in rows if r.get("subset") == tsv.FULL]
-    scored = [r for r in full if r.get("score")]
-    if scored:
-        best = max(scored, key=lambda r: float(r["score"]))
+    best = tsv.best_row([r for r in rows if r.get("subset") == tsv.FULL])
+    if best:
         lines.append(f"best full-eval: {best['candidate_file']} score {best['score']}")
     kept = [r for r in rows if r.get("status") == tsv.KEPT]
     if kept:

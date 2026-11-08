@@ -45,7 +45,7 @@ flowchart TD
 ```bash
 uv sync                                                        # numpy + highspy + pytest
 uv run pytest                                                  # framework + problem tests
-uv run python -m problems.mdkp.generator                       # writes 10 benchmark instances
+uv run python -m problems.mdkp.generator                       # writes 9 benchmark instances
 uv run python scripts/run_reference.py --problem mdkp --subset full --budgets 1,5,20,60
 uv run python scripts/test_solver.py --problem mdkp \
     --solver problems/mdkp/candidates/example_random.py --full  # solver test battery
@@ -56,14 +56,19 @@ uv run python evaluation/eval_solver.py --problem mdkp \
 Run the loop:
 
 - **Autonomous (default, in-place)**: `uv run python scripts/run_loop.py`
-  (config in `loop.json`; needs `.env` with `ANTHROPIC_*` keys - see
-  `.env.example`; `claude` CLI on PATH). Drives one headless session per
-  iteration with a generated digest, enforces hard caps, prints results after
-  every iteration plus a summary table at the end, and commits bookkeeping to
-  a `loop/<problem>__<ts>` branch (created automatically when started from
-  `main`; requires a clean tree). `--iterations N` runs N NEW full iterations
-  (the target counts from where the current branch's history starts).
-  `--dry-run` prints the plan.
+  (shorthand: `uv run or-loop`; config in `loop.json`; needs `.env` with
+  `ANTHROPIC_*` keys - see `.env.example`; `claude` CLI on PATH). Drives one
+  headless session per iteration with a generated digest, enforces hard caps,
+  prints results after every iteration plus a summary table at the end, and
+  commits bookkeeping to a `loop/<problem>__<ts>` branch (created
+  automatically when started from `main`; requires a clean tree).
+  `--iterations N` runs N NEW full iterations (the target counts from where
+  the current branch's history starts). `--dry-run` prints the plan.
+
+  Driver artifacts (gitignored, repo root): `driver_log.jsonl` (one line per
+  invocation), `.driver_prompt.txt` (the exact prompt of the last invocation),
+  `.driver_state.json` (the bookkeeping checkpoint - do not delete mid-run;
+  a missing checkpoint makes the next bookkeeping pass reprocess old rows).
 
   **`main` carries no research state** - history, hypotheses, knowledge and
   candidates live on the loop branch each run creates. Starting from `main`
@@ -73,10 +78,17 @@ Run the loop:
   notable runs.
 - **Autonomous (isolated)**: `uv run python scripts/run_loop.py --isolate`
   runs in a full-copy throwaway workspace under `loop_runs/` - use only to
-  run several loops in parallel. `--workspace <dir>` resumes one.
+  run several loops in parallel. `--workspace <dir>` resumes one;
+  `--assemble-only` builds the workspace and stops (inspect before running).
 - **Interactive**: in a Claude Code session (ideally on a branch), invoke
-  `/or-iterate` - the session becomes the Orchestrator for one iteration and
-  runs bookkeeping via `scripts/finish_iteration.py`.
+  `/or-iterate` (optionally `/or-iterate 3` for three iterations) - the
+  session becomes the Orchestrator for one iteration and runs bookkeeping via
+  `scripts/finish_iteration.py`.
+
+Inspecting results without touching the TSVs:
+`uv run python scripts/experiment_log.py [--full]` renders history.tsv joined
+with hypotheses.tsv (kept list, best full score); `scripts/analyze_run.py
+--run <ts>` summarizes one eval run per instance class.
 
 ## Architecture
 
@@ -111,11 +123,21 @@ stronger budgets. Pluggable: `--scorer <name>` selects from the registry in
   `proposed -> running -> kept | discarded`, score, rationale.
 - `problems/<p>/research/knowledge/` - the Analyst's wiki of learnings.
 
-Loop hyperparameters live in `loop.json`: `idea_pivot_n` (default 3 -
-consecutive discarded hypotheses under one idea force a pivot; a kept result
-resets), `max_hypotheses_per_idea`, `new_idea_every_n`, `plateau_window`,
-plus driver caps. The pivot rule is enforced deterministically by the driver
-(and rendered in the digest); the rest are digest nudges.
+Loop configuration lives in `loop.json` (re-read at the top of every driver
+iteration, so editing it retunes a running loop):
+
+| Key | Meaning | Consumed by |
+|---|---|---|
+| `problem` | problem package under `problems/` | driver, digest, CLIs |
+| `iterations` | full-subset evals per run (target counts from where the current branch's history starts) | driver target, interactive digest |
+| `idea_pivot_n` | consecutive discards under one idea that force a pivot (a kept result resets) | pivot rule - enforced by the driver, rendered in the digest |
+| `max_hypotheses_per_idea` | hypotheses allowed under one idea before preferring a different one | digest (Researcher guidance) |
+| `new_idea_every_n` | every N full iterations, nudge to propose a NEW idea | digest |
+| `max_turns`, `claude_cap_minutes`, `timeout_hours` | per-invocation turn cap, hard wall-clock cap per session, overall run timeout | driver |
+
+The scorer is NOT set here: it lives per problem in
+`problems/<p>/benchmark_config.py` (`SCORER`, default `"auc"`) and can be
+overridden per eval with `--scorer`.
 
 ## Candidates
 
@@ -124,7 +146,10 @@ Any algorithm is allowed - MIP is not required; HiGHS (`highspy`) is available
 but optional. Fixed seeds only, deterministic given (instance, budget), the
 time budget is a cap. Quick feedback: `scripts/test_solver.py --problem <p>
 --solver <file> [--full]` (contract, feasibility, determinism, budget
-respect, objective bounds).
+respect, objective bounds). Every eval (`eval_solver.py`) first runs a cheap
+preflight - one smoke instance at the smallest budget; on `PREFLIGHT FAIL`
+it exits 2 and writes nothing (no TSV row, no `runs/` dir) - fix the
+candidate, do not retry. `--no-preflight` skips the check.
 
 ## Observability (Langfuse)
 
@@ -157,8 +182,11 @@ Langfuse via Claude Code's native OTel telemetry. Opt-in, no code changes:
 
 Everything degrades gracefully: if Langfuse is not running, the driver prints
 one "continuing WITHOUT tracing" notice and keeps looping (re-checking each
-iteration), and `with_langfuse.sh` launches the command plainly - observability
-never blocks a research run.
+iteration), and `with_langfuse.sh` launches the command plainly. The one hard
+failure is missing keys: `with_langfuse.sh` exits 2 when
+`LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` are absent from `.env` (the
+driver just disables telemetry in that case) - observability never blocks a
+research run.
 
 Gotcha worth knowing: Claude Code only exports OTLP **traces** when both
 `CLAUDE_CODE_ENABLE_TELEMETRY=1` and `CLAUDE_CODE_ENHANCED_TELEMETRY_BETA=1`
@@ -200,7 +228,9 @@ round-trip + aliases), `generator.py` (seeded, feasible by construction),
 and optional `SCORER`), and `solvers/` (a strong anchor + an always-feasible
 constructive baseline). Optional hooks: `bounds.py` (bound for the battery's
 `--full` check) and `scorers.py` (custom scorers). Then generate instances,
-build the reference, and point `loop.json`'s `"problem"` at it.
+build the reference with STRONGER budgets than `TIME_BUDGETS` (e.g.
+`--budgets 1,5,20,60` for eval budgets `[1, 5]` - a strong anchor keeps ratio
+scores meaningful), and point `loop.json`'s `"problem"` at it.
 
 ## Conventions
 

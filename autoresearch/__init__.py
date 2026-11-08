@@ -28,16 +28,11 @@ Solver contract: a solver file defines ``solve(instance, time_budget_s) -> Solut
 Any algorithm is allowed - MIP is NOT required.
 """
 
-from autoresearch.spec import ResultStatus, SolverContractError
-from autoresearch.scoring import score_rows, best_objectives, coverage
+from autoresearch.spec import SolverContractError
 from autoresearch import harness, hypotheses, reference, tsv
 
 __all__ = [
-    "ResultStatus",
     "SolverContractError",
-    "score_rows",
-    "best_objectives",
-    "coverage",
     "harness",
     "hypotheses",
     "reference",

@@ -1,13 +1,11 @@
 """Preflight: the free crash-check gate before any eval spend."""
 
 import json
-import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
-
 from autoresearch import preflight
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _write_solver(tmp_path, body, name="solver.py"):

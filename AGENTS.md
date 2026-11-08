@@ -30,14 +30,20 @@ or the `show_digest.py` output, whichever mode you are in.
 - `evaluation/eval_solver.py` - THE evaluation CLI. Never write a per-problem
   eval script.
 - `scripts/` - hypothesis CLI (the Researcher's write path), test_solver battery,
-  analyze_run (Analyst feed), show_digest, run_reference, finish_iteration.
+  analyze_run (Analyst feed), experiment_log (rendered history x hypotheses
+  view), show_digest, run_reference, run_loop (autonomous driver),
+  finish_iteration.
 - `problems/mdkp/` - the problem: schema, generator, evaluator, benchmark
   config, `solvers/` (reference baselines), `candidates/` (your solvers),
   `research/` (state: idea files, hypotheses.tsv, history.tsv, knowledge/).
 - `problems/mdkp/benchmark/` - READ-ONLY instance files.
 - `.claude/agents/` - the four named subagents: implementor, profiler,
   analyst, researcher.
-- `runs/<UTC timestamp>/` - raw eval outputs incl. `logs/` (gitignored).
+- `loop.json` - loop configuration (problem, iterations, hyperparameters,
+  driver caps); re-read every driver iteration. `.env` - LLM + observability
+  keys for the driver (see `.env.example`).
+- `runs/<UTC timestamp>/` - raw eval outputs: `results.json`, `score.json`,
+  and `logs/` (gitignored).
 
 ## Solver contract
 
@@ -100,7 +106,9 @@ is pluggable (`--scorer`, registry in `autoresearch/scoring.py`; default `auc`).
 3. Every full evaluation goes through
    `uv run python evaluation/eval_solver.py --problem mdkp --solver <file>
    --subset full --hypothesis-id H<k> --hypothesis "<one line>" --learnings "<one line>"`
-   - that is what writes the TSV row and resolves the hypothesis.
+   - that is what writes the TSV row and resolves the hypothesis. The eval
+   runs a preflight crash-check first; on `PREFLIGHT FAIL` it exits 2 and
+   writes NOTHING - fix the candidate, do not retry.
 4. Deterministic seeds everywhere. Nothing may depend on wall-clock or entropy.
 5. uv only, never pip. No emojis. Do not run git - bookkeeping commits.
 6. Keep context small: this file, the digest, and the latest eval summary are

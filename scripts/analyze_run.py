@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from autoresearch import reference  # noqa: E402
+from autoresearch import reference, scoring  # noqa: E402
 
 
 def _cls(instance_name: str) -> str:
@@ -50,19 +50,18 @@ def main() -> int:
     print("per class (mean ratio-to-reference / coverage / mean wall_s):")
     for cls in sorted(by_class):
         crows = by_class[cls]
-        ratios = []
-        for r in crows:
-            if r["status"] == "ok" and r["instance"] in refs and refs[r["instance"]] > 0:
-                ratios.append(r["objective"] / refs[r["instance"]] if sense == "max"
-                              else refs[r["instance"]] / r["objective"])
-        cov = sum(1 for r in crows if r["status"] == "ok") / len(crows)
+        ratios = [
+            scoring.instance_score(refs[r["instance"]], r["objective"], sense)
+            for r in crows
+            if r["status"] == "ok" and r["instance"] in refs and refs[r["instance"]] > 0
+        ]
+        cov = scoring.coverage(crows)
         wall = sum(r.get("wall_s") or 0.0 for r in crows) / len(crows)
         mean_ratio = sum(ratios) / len(ratios) if ratios else 0.0
         print(f"  {cls:8} ratio {mean_ratio:.4f}  cov {cov:.2f}  wall {wall:.2f}s")
 
     scored = [
-        (r["objective"] / refs[r["instance"]] if sense == "max" else refs[r["instance"]] / r["objective"],
-         r)  # noqa: E128
+        (scoring.instance_score(refs[r["instance"]], r["objective"], sense), r)
         for r in rows
         if r["status"] == "ok" and r["instance"] in refs and refs[r["instance"]] > 0
     ]

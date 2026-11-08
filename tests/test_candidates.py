@@ -1,14 +1,12 @@
 """The battery over every committed mdkp solver: a broken candidate fails pytest."""
 
-import sys
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 import pytest
 
 from autoresearch import solver_checks
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _SOLVERS = sorted(
     (REPO_ROOT / "problems" / "mdkp" / "candidates").glob("*.py")

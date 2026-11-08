@@ -1,12 +1,10 @@
 """Solver test battery: contract, feasibility, determinism, budget, bounds."""
 
-import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
-
 from autoresearch import solver_checks
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 OK_SOLVER = (
     "from problems.mdkp.problem import MDKPSolution\n"

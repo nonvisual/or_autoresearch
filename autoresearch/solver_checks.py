@@ -48,7 +48,7 @@ def run_battery(problem: str, solver_path: Path, repo_root: Path, full: bool = F
     try:
         mod = load_solver_module(str(solver_path))
         results.append(CheckResult("contract", PASS, f"solve() found in {solver_path.name}"))
-    except Exception as exc:  # noqa: BLE001 - the check itself is "does it load"
+    except Exception as exc:  # the check itself is "does it load"
         results.append(CheckResult("contract", FAIL, f"{type(exc).__name__}: {str(exc)[-300:]}"))
         return results
 
@@ -71,7 +71,7 @@ def run_battery(problem: str, solver_path: Path, repo_root: Path, full: bool = F
                 solved.append((inst, sol, float(evaluator.objective(inst, sol))))
             else:
                 feasible = False
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             feasible = False
             detail.append(f"{type(exc).__name__}: {str(exc)[-120:]}")
     results.append(CheckResult("feasible", PASS if feasible else FAIL, "; ".join(detail)[:300]))
@@ -95,9 +95,13 @@ def run_battery(problem: str, solver_path: Path, repo_root: Path, full: bool = F
             results.append(CheckResult("objective_bounds", PASS if ok else FAIL,
                                        "; ".join(bdetail)[:300]))
 
-    # 4. determinism (two runs, same instance and budget)
+    # 4. determinism (two runs, same instance and budget); the timed first
+    #    run also feeds the budget check below, saving one extra solve
+    wall_a: float | None = None
     try:
+        t0 = time.perf_counter()
         a = mod.solve(instances[0], budget)
+        wall_a = time.perf_counter() - t0
         b = mod.solve(instances[0], budget)
         da = a.to_dict() if hasattr(a, "to_dict") else repr(a)
         db = b.to_dict() if hasattr(b, "to_dict") else repr(b)
@@ -118,20 +122,21 @@ def run_battery(problem: str, solver_path: Path, repo_root: Path, full: bool = F
                     "determinism", FAIL,
                     f"reruns differ materially ({oa} vs {ob}); seed all randomness from a constant",
                 ))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         results.append(CheckResult("determinism", FAIL, f"{type(exc).__name__}: {str(exc)[-200:]}"))
 
-    # 5. budget respect
+    # 5. budget respect (reuses the determinism run's wall time when present)
     try:
-        t0 = time.perf_counter()
-        mod.solve(instances[0], budget)
-        wall = time.perf_counter() - t0
-        if wall <= budget * harness.SLACK:
-            results.append(CheckResult("budget_respect", PASS, f"{wall:.2f}s <= {budget:g}s x {harness.SLACK}"))
+        if wall_a is None:
+            t0 = time.perf_counter()
+            mod.solve(instances[0], budget)
+            wall_a = time.perf_counter() - t0
+        if wall_a <= budget * harness.SLACK:
+            results.append(CheckResult("budget_respect", PASS, f"{wall_a:.2f}s <= {budget:g}s x {harness.SLACK}"))
         else:
             results.append(CheckResult("budget_respect", FAIL,
-                                       f"{wall:.2f}s exceeds budget {budget:g}s (harness kills at x{harness.SLACK})"))
-    except Exception as exc:  # noqa: BLE001
+                                       f"{wall_a:.2f}s exceeds budget {budget:g}s (harness kills at x{harness.SLACK})"))
+    except Exception as exc:
         results.append(CheckResult("budget_respect", FAIL, f"{type(exc).__name__}: {str(exc)[-200:]}"))
 
     return results

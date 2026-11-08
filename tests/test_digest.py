@@ -1,11 +1,7 @@
 """Digest v2: idea heads, pivot rendering, hypothesis tail, knowledge tail, bounds."""
 
 import os
-import sys
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 from autoresearch import digest, hypotheses, reference, tsv
 

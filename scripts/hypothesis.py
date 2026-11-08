@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from autoresearch import hypotheses  # noqa: E402
+from autoresearch.textutil import one_line  # noqa: E402
 
 
 def main() -> int:
@@ -77,14 +78,9 @@ def main() -> int:
         print(
             f"{r.get('id', '?')}  [{r.get('idea_refs') or '-'}|{r.get('type') or '-'}]  "
             f"{r.get('status', '?'):9}  {r.get('candidate_file') or '-':32}  "
-            f"{r.get('score') or '-':>9}  {_one(r.get('hypothesis'))}"
+            f"{r.get('score') or '-':>9}  {one_line(r.get('hypothesis'), 70)}"
         )
     return 0
-
-
-def _one(text: str, limit: int = 70) -> str:
-    single = " ".join(str(text or "").split())
-    return single if len(single) <= limit else single[: limit - 3] + "..."
 
 
 if __name__ == "__main__":

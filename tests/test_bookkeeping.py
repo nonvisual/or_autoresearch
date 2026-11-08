@@ -1,11 +1,7 @@
 """Bookkeeping against a real git repo in tmp: commits, discards, fallback notes."""
 
 import subprocess
-import sys
 from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
 
 from autoresearch import bookkeeping, hypotheses, tsv
 
@@ -16,17 +12,13 @@ def _git(ws: Path, *args: str) -> str:
     return proc.stdout
 
 
-def _make_ws(tmp_path: Path) -> Path:
+def _make_ws(tmp_path: Path, make_git_repo) -> Path:
     ws = tmp_path / "ws"
     problem_dir = ws / "problems" / "mdkp"
     (problem_dir / "candidates").mkdir(parents=True)
     (problem_dir / "research").mkdir(parents=True)
     (ws / "README.md").write_text("# ws\n")  # something to commit at init
-    subprocess.run(["git", "-C", str(ws), "init", "-q"], check=True)
-    _git(ws, "config", "user.email", "t@example.com")
-    _git(ws, "config", "user.name", "t")
-    _git(ws, "add", "-A")
-    _git(ws, "commit", "-q", "-m", "init")
+    make_git_repo(ws)
     return ws
 
 
@@ -38,8 +30,8 @@ def _full_row(problem_dir: Path, label: str, status: str, hid: str = "H1") -> No
     })
 
 
-def test_kept_row_commits_research_state_incl_hypotheses_and_knowledge(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_kept_row_commits_research_state_incl_hypotheses_and_knowledge(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     candidate = problem_dir / "candidates" / "candidate_x.py"
     candidate.write_text("# candidate\n")
@@ -57,8 +49,8 @@ def test_kept_row_commits_research_state_incl_hypotheses_and_knowledge(tmp_path)
     assert "problems/mdkp/candidates/candidate_x.py" in head
 
 
-def test_discarded_row_removes_candidate_with_guard(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_discarded_row_removes_candidate_with_guard(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     candidate = problem_dir / "candidates" / "candidate_x.py"
     candidate.write_text("# candidate\n")
@@ -75,8 +67,8 @@ def test_discarded_row_removes_candidate_with_guard(tmp_path):
     assert not (problem_dir / "candidates" / "candidate_y.py").exists()  # unreferenced: removed
 
 
-def test_fallback_note_when_session_did_not_enrich(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_fallback_note_when_session_did_not_enrich(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     _full_row(problem_dir, "candidate_x.py", "discarded")
     bookkeeping.process(ws, "mdkp")
@@ -85,8 +77,8 @@ def test_fallback_note_when_session_did_not_enrich(tmp_path):
     assert "discarded" in notes.read_text()
 
 
-def test_stale_checkpoint_after_history_reset_is_reprocessed(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_stale_checkpoint_after_history_reset_is_reprocessed(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     candidate = problem_dir / "candidates" / "candidate_x.py"
     candidate.write_text("# candidate\n")
@@ -99,8 +91,8 @@ def test_stale_checkpoint_after_history_reset_is_reprocessed(tmp_path):
     assert bookkeeping.load_state(ws) == {"rows_seen": 1}
 
 
-def test_no_fallback_note_when_session_enriched(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_no_fallback_note_when_session_enriched(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     _full_row(problem_dir, "candidate_x.py", "discarded")
     # the "session" appended an LLM idea after the row was written
@@ -111,8 +103,8 @@ def test_no_fallback_note_when_session_enriched(tmp_path):
     assert not notes.exists()
 
 
-def test_incomplete_invocation_commits_dirty_state(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_incomplete_invocation_commits_dirty_state(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     tsv.append(problem_dir, {
         "candidate_file": "c.py", "score": "0.5", "subset": "smoke", "status": "discarded",
@@ -122,8 +114,8 @@ def test_incomplete_invocation_commits_dirty_state(tmp_path):
     assert any("incomplete invocation" in a for a in actions)
 
 
-def test_idempotent_and_report_commit(tmp_path):
-    ws = _make_ws(tmp_path)
+def test_idempotent_and_report_commit(tmp_path, make_git_repo):
+    ws = _make_ws(tmp_path, make_git_repo)
     problem_dir = ws / "problems" / "mdkp"
     _full_row(problem_dir, "candidate_x.py", "kept")
     bookkeeping.process(ws, "mdkp")
