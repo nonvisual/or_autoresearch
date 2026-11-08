@@ -51,6 +51,24 @@ flowchart LR
     P5 -->|next iteration| P2
 ```
 
+## Requirements
+
+The research loop runs on [Claude Code](https://claude.com/claude-code) - it is
+a hard dependency, not one option among many:
+
+- **Autonomous mode** spawns headless Claude Code sessions (`claude -p`) once
+  per iteration: the `claude` CLI must be on PATH and `.env` must hold
+  `ANTHROPIC_*` keys (see `.env.example`).
+- **Interactive mode** IS a Claude Code session: the `/or-iterate` skill and
+  the four agents in `.claude/agents/` are Claude Code constructs.
+
+The Python framework underneath (evaluation harness, scoring, battery,
+reference build, bookkeeping CLIs) is plain `uv`-managed Python with no LLM
+dependency and runs standalone - but the loop protocol itself
+(Researcher / Implementor / Profiler / Analyst sessions) is wired to the
+Claude Code CLI, its stream-json output, and its telemetry env, and does not
+work with other agent harnesses as shipped.
+
 ## Quickstart
 
 ```bash
