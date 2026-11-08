@@ -9,35 +9,46 @@ redesigned around user/LLM research ideas, a hypotheses log, named agents,
 and exploration hyperparameters.
 
 ```mermaid
-flowchart TD
-    subgraph entry["Entry - dual usage"]
+flowchart LR
+    subgraph P1["Entry - dual usage"]
+        direction TB
         DRV["Python driver<br/>scripts/run_loop.py<br/>autonomous, in-place (or --isolate)"]
         SKL["/or-iterate skill<br/>interactive session"]
     end
-    DIG["State digest<br/>ideas, hypotheses, pivot state,<br/>history, reference, knowledge"]
-    RES["Researcher agent<br/>pick idea + hypothesis<br/>pivot rule enforced"]
-    IMP["Implementor agent<br/>candidate solver file"]
-    BAT["Solver test battery<br/>scripts/test_solver.py<br/>+ smoke eval"]
-    PRO["Profiler agent<br/>speed, behavior unchanged"]
-    EV["Full eval<br/>evaluation/eval_solver.py<br/>AUC over time budgets"]
-    KD{"kept / discarded<br/>reference improved?"}
-    ANA["Analyst agent<br/>per-class breakdown, logs,<br/>knowledge wiki, new ideas"]
-    BK["Bookkeeping<br/>commits + hypothesis resolution<br/>driver or finish_iteration.py"]
-    ST[("research state<br/>ResearchDirections*.md<br/>hypotheses.tsv, history.tsv<br/>reference.json, knowledge/")]
-    DRV --> DIG
-    SKL --> DIG
-    DIG --> RES
-    RES --> IMP
-    IMP --> BAT
-    BAT -->|pass| PRO
-    BAT -->|fail| IMP
-    PRO --> EV
-    EV --> KD
-    KD --> ANA
-    ANA --> BK
-    BK --> ST
-    ST --> DIG
-    KD -->|next iteration| DIG
+    subgraph P2["Orient"]
+        direction TB
+        DIG["State digest<br/>ideas, hypotheses, pivot state,<br/>history, reference, knowledge"]
+        RES["Researcher agent<br/>pick idea + hypothesis<br/>pivot rule enforced"]
+        DIG --> RES
+    end
+    subgraph P3["Build candidate"]
+        direction TB
+        IMP["Implementor agent<br/>candidate solver file"]
+        BAT["Solver test battery<br/>scripts/test_solver.py<br/>+ smoke eval"]
+        PRO["Profiler agent<br/>speed, behavior unchanged"]
+        IMP --> BAT
+        BAT -->|pass| PRO
+        BAT -->|fail| IMP
+    end
+    subgraph P4["Evaluate"]
+        direction TB
+        EV["Full eval<br/>evaluation/eval_solver.py<br/>AUC over time budgets"]
+        KD{"kept / discarded?<br/>reference improved?"}
+        EV --> KD
+    end
+    subgraph P5["Close the iteration"]
+        direction TB
+        ANA["Analyst agent<br/>per-class breakdown, logs,<br/>knowledge wiki, new ideas"]
+        BK["Bookkeeping<br/>commits + hypothesis resolution<br/>driver or finish_iteration.py"]
+        ST[("research state<br/>ResearchDirections*.md<br/>hypotheses.tsv, history.tsv<br/>reference.json, knowledge/")]
+        ANA --> BK
+        BK --> ST
+    end
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+    P4 -->|verdict| P5
+    P5 -->|next iteration| P2
 ```
 
 ## Quickstart
