@@ -93,13 +93,15 @@ is pluggable (`--scorer`, registry in `autoresearch/scoring.py`; default `auc`).
 - The digest states the full-row count. If the target is reached, do Phase 3
   and stop. Otherwise perform exactly ONE iteration (Phase 2) and stop. Never
   run two full evals in one invocation.
-- Never delete a `kept` candidate file.
+- Never delete candidate files yourself - bookkeeping removes discarded ones
+  automatically (kept files stay forever).
 
 ## Hard rules
 
 1. Never write to `benchmark/`, `reference.json`, `history.tsv`,
    `hypotheses.tsv`, or `ResearchDirectionsUser.md` by hand. Instances are
-   regenerated only via the generator; reference/TSVs only via the CLIs.
+   regenerated only via the problem's generator (committed seeds);
+   reference/TSVs only via the CLIs.
 2. Every candidate goes through the battery first
    (`uv run python scripts/test_solver.py --problem mdkp --solver <file>`),
    then `--subset smoke`, then `--subset full`. Fix the code; do not retry blindly.
@@ -110,7 +112,8 @@ is pluggable (`--scorer`, registry in `autoresearch/scoring.py`; default `auc`).
    runs a preflight crash-check first; on `PREFLIGHT FAIL` it exits 2 and
    writes NOTHING - fix the candidate, do not retry.
 4. Deterministic seeds everywhere. Nothing may depend on wall-clock or entropy.
-5. uv only, never pip. No emojis. Do not run git - bookkeeping commits.
+5. uv only, never pip (`uv sync`, `uv run ...`). No emojis. Do not run git -
+   bookkeeping commits.
 6. Keep context small: this file, the digest, and the latest eval summary are
    all you need per iteration.
 7. If it isn't written to a file, it didn't happen: rationale via
@@ -133,8 +136,9 @@ is pluggable (`--scorer`, registry in `autoresearch/scoring.py`; default `auc`).
 
 ## Phase 0 - Orientation (start of every invocation)
 
-1. Read the digest. It is current and authoritative - do NOT re-read
-   `history.tsv`, `hypotheses.tsv`, `reference.json`, or the idea files.
+1. Read the digest. It is current and authoritative - honor `PIVOT REQUIRED`
+   and the loop hyperparameters it states, and do NOT re-read `history.tsv`,
+   `hypotheses.tsv`, `reference.json`, or the idea files.
 2. If the digest shows the target number of full rows complete, do Phase 3
    and stop.
 3. First invocation only: if `problems/mdkp/reference.json` does not exist, run

@@ -36,7 +36,7 @@ Steps:
 4. Report a <=5-line summary (hypothesis, verdict kept/discarded, score,
    reference updates) and STOP. The user re-invokes `/or-iterate` to continue.
 
-Hard rules (from AGENTS.md/CLAUDE.md, enforced here): never hand-edit
+Hard rules (from AGENTS.md, enforced here): never hand-edit
 `benchmark/`, `reference.json`, the TSVs, or `ResearchDirectionsUser.md`;
 battery + smoke before every full eval; no git commands (bookkeeping CLI
 only); keep context lean - delegate to the agents, trust the digest.
